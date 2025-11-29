@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>PRAYAS - Flood Risk Map</title>
+
+		<!-- Tailwind CSS for styling -->
+		<script src="https://cdn.tailwindcss.com"></script>
+
+		<!-- LeafletJS for interactive maps -->
+		<link
+			rel="stylesheet"
+			href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+			integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+			crossorigin=""
+		/>
+		<script
+			src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+			integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+			crossorigin=""
+		></script>
+
+		<!-- Leaflet Geosearch for location search -->
+		<link
+			rel="stylesheet"
+			href="https://unpkg.com/leaflet-geosearch@3.11.0/dist/geosearch.css"
+		/>
+		<script src="https://unpkg.com/leaflet-geosearch@3.11.0/dist/geosearch.umd.js"></script>
+
+		<!-- Font Awesome for Icons -->
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+		/>
+
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+			rel="stylesheet"
+		/>
+
+		<style>
+			/* --- Base & Font --- */
+			body {
+				font-family: 'Inter', -apple-system, BlinkMacSystemFont,
+					'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+				background-color: #f3f4f6; /* Light gray background */
+				overflow: hidden;
+			}
+
+			/* --- Map & UI Panels --- */
+			#map {
+				height: 100vh;
+				width: 100vw;
+				z-index: 10;
+			}
+
+			.ui-panel {
+				background: rgba(255, 255, 255, 0.8);
+				backdrop-filter: blur(20px) saturate(180%);
+				-webkit-backdrop-filter: blur(20px) saturate(180%);
+				border: 1px solid rgba(0, 0, 0, 0.05);
+				border-radius: 20px;
+				box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+				color: #1f2937; /* Darker text */
+			}
+
+			.leaflet-top.leaflet-right {
+				top: 20px;
+			}
+
+			.geosearch form {
+				border-radius: 12px !important;
+				border: 1px solid rgba(0, 0, 0, 0.1);
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+			}
+
+			/* --- iOS Style Toggle Switch --- */
+			.toggle-switch {
+				position: relative;
+				display: inline-block;
+				width: 51px;
+				height: 31px;
+				flex-shrink: 0;
+			}
+			.toggle-switch input {
+				opacity: 0;
+				width: 0;
+				height: 0;
+			}
+			.slider {
+				position: absolute;
+				cursor: pointer;
+				top: 0;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				background-color: #ccc;
+				transition: 0.4s;
+				border-radius: 34px;
+			}
+			.slider:before {
+				position: absolute;
+				content: '';
+				height: 27px;
+				width: 27px;
+				left: 2px;
+				bottom: 2px;
+				background-color: white;
+				transition: 0.4s;
+				border-radius: 50%;
+				box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+			}
+			input:checked + .slider {
+				background-color: #34c759;
+			}
+			input:checked + .slider:before {
+				transform: translateX(20px);
+			}
+
+			/* --- Custom Rainfall Slider --- */
+			input[type='range'].rainfall-slider {
+				-webkit-appearance: none;
+				width: 100%;
+				height: 8px;
+				background: #e5e7eb;
+				border-radius: 5px;
+				outline: none;
+				opacity: 0.7;
+				transition: opacity 0.2s;
+			}
+			input[type='range'].rainfall-slider:hover {
+				opacity: 1;
+			}
+			input[type='range'].rainfall-slider::-webkit-slider-thumb {
+				-webkit-appearance: none;
+				appearance: none;
+				width: 24px;
+				height: 24px;
+				background: #fff;
+				cursor: pointer;
+				border-radius: 50%;
+				border: 1px solid #d1d5db;
+				box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+			}
+			input[type='range'].rainfall-slider::-moz-range-thumb {
+				width: 24px;
+				height: 24px;
+				background: #fff;
+				cursor: pointer;
+				border-radius: 50%;
+				border: 1px solid #d1d5db;
+				box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+			}
+
+			.loader {
+				border: 4px solid #e5e7eb;
+				border-top: 4px solid #3b82f6;
+				border-radius: 50%;
+				width: 30px;
+				height: 30px;
+				animation: spin 1s linear infinite;
+			}
+
+			@keyframes spin {
+				0% {
+					transform: rotate(0deg);
+				}
+				100% {
+					transform: rotate(360deg);
+				}
+			}
+
+			/* --- Modal Content Scrolling --- */
+			#modal-content {
+				max-height: 60vh;
+				overflow-y: auto;
+			}
+		</style>
+	</head>
+	<body class="bg-gray-900">
+		<div id="map"></div>
+		<audio id="tts-audio" style="display: none"></audio>
+
+		<!-- Header -->
+		<div class="absolute top-4 left-4 p-2 z-20">
+			<div class="ui-panel px-4 py-3">
+				<h1 class="text-lg font-bold text-gray-800 flex items-center">
+					<i class="fas fa-water text-blue-500 mr-3"></i> Check Your
+					Locality
+				</h1>
+			</div>
+		</div>
+
+		<!-- Left Controls Container -->
+		<div
+			id="left-controls-container"
+			class="absolute top-24 left-4 p-4 ui-panel z-20 max-w-sm w-full space-y-4 max-h-[calc(100vh-7rem)] overflow-y-auto"
+		>
+			<!-- Add Shelter Button -->
+			<div>
+				<a
+					href="shelter.html"
+					target="_blank"
+					class="w-full bg-green-500 text-white font-semibold py-3 px-4 rounded-xl hover:bg-green-600 transition-colors flex items-center justify-center"
+				>
+					<i class="fas fa-plus-circle mr-2"></i> Register a New
+					Shelter
+				</a>
+			</div>
+
+			<!-- Divider -->
+			<hr class="border-gray-200/80" />
+
+			<!-- Weather Section -->
+			<div>
+				<h3 class="font-bold text-gray-800 text-xl mb-3">
+					Live Conditions
+				</h3>
+				<div
+					id="alert-status"
+					class="p-3 rounded-xl text-center text-white font-bold text-lg transition-colors duration-500 bg-gray-400/80 mb-3"
+				>
+					Loading...
+				</div>
+				<div class="space-y-2 text-gray-700">
+					<div
+						id="location-name"
+						class="font-semibold text-lg text-gray-900"
+					>
+						Loading location...
+					</div>
+					<div class="flex justify-between items-baseline">
+						<span
+							id="weather-description"
+							class="capitalize text-lg"
+							>--</span
+						>
+						<span
+							id="weather-temp"
+							class="text-3xl font-bold text-gray-900"
+							>--&deg;C</span
+						>
+					</div>
+					<div id="weather-rainfall">Rainfall (1h): -- mm</div>
+				</div>
+			</div>
+
+			<!-- Divider -->
+			<hr class="border-gray-200/80" />
+
+			<!-- Simulation Section -->
+			<div>
+				<h3 class="font-bold text-gray-800 text-xl mb-3">
+					Flood Simulation
+				</h3>
+				<div class="space-y-4">
+					<div>
+						<label
+							for="rainfall-slider"
+							class="block text-gray-600 text-sm font-medium mb-2"
+							>Simulate Rainfall</label
+						>
+						<input
+							id="rainfall-slider"
+							type="range"
+							min="0"
+							max="200"
+							value="0"
+							step="1"
+							class="w-full rainfall-slider"
+						/>
+						<div
+							class="text-gray-800 text-center font-semibold mt-2"
+							id="rainfall-value"
+						>
+							0 mm/hr
+						</div>
+					</div>
+					<div class="grid grid-cols-2 gap-3">
+						<button
+							id="run-simulation-btn"
+							class="w-full bg-blue-500 text-white font-semibold py-3 px-4 rounded-xl hover:bg-blue-600 transition-colors"
+						>
+							<i class="fas fa-play-circle mr-2"></i>Impact
+						</button>
+						<button
+							id="ai-briefing-btn"
+							class="w-full bg-indigo-500 text-white font-semibold py-3 px-4 rounded-xl hover:bg-indigo-600 transition-colors"
+						>
+							<i class="fas fa-brain mr-2"></i>Briefing
+						</button>
+					</div>
+				</div>
+			</div>
+
+			<!-- Divider -->
+			<hr class="border-gray-200/80" />
+
+			<!-- Layers Section -->
+			<div>
+				<h3 class="font-bold text-gray-800 text-xl mb-3">Map Layers</h3>
+				<div id="layer-toggles" class="space-y-3 text-gray-700">
+					<div class="flex justify-between items-center">
+						<span>Flood Simulation</span>
+						<label class="toggle-switch"
+							><input
+								type="checkbox"
+								id="risk-zones-toggle"
+								checked /><span class="slider"></span
+						></label>
+					</div>
+					<div class="flex justify-between items-center">
+						<span>Safe Shelters</span>
+						<label class="toggle-switch"
+							><input
+								type="checkbox"
+								id="shelters-toggle"
+								checked /><span class="slider"></span
+						></label>
+					</div>
+					<div class="flex justify-between items-center">
+						<span>Historical Floods</span>
+						<label class="toggle-switch"
+							><input
+								type="checkbox"
+								id="historical-toggle" /><span
+								class="slider"
+							></span
+						></label>
+					</div>
+				</div>
+			</div>
+
+			<!-- Divider -->
+			<hr class="border-gray-200/80" />
+
+			<!-- Legend Section -->
+			<div>
+				<h3 class="font-bold text-gray-800 text-xl mb-3">
+					Flood Risk Legend
+				</h3>
+				<div id="legend" class="space-y-2 text-gray-600">
+					<div class="flex items-center">
+						<div
+							class="w-4 h-4 rounded-full bg-red-500/80 mr-3 border border-red-300"
+						></div>
+						<span>High Risk (>2m)</span>
+					</div>
+					<div class="flex items-center">
+						<div
+							class="w-4 h-4 rounded-full bg-yellow-400/80 mr-3 border border-yellow-300"
+						></div>
+						<span>Moderate Risk (0.5-2m)</span>
+					</div>
+					<div class="flex items-center">
+						<div
+							class="w-4 h-4 rounded-full bg-gray-400/80 mr-3 border border-gray-300"
+						></div>
+						<span>Low Risk (0.1-0.5m)</span>
+					</div>
+					<div class="flex items-center">
+						<div
+							class="w-4 h-4 rounded-full bg-green-400/80 mr-3 border border-green-300"
+						></div>
+						<span>Very Low Risk (<0.1m)</span>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Alert Modals -->
+		<div
+			id="alert-box"
+			class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1001]"
+		>
+			<div class="ui-panel p-6 w-11/12 md:w-1/3 text-center">
+				<h3
+					class="font-bold text-red-600 text-2xl flex items-center justify-center mb-3"
+				>
+					<i
+						class="fas fa-triangle-exclamation mr-3 animate-pulse"
+					></i
+					>FLOOD WARNING
+				</h3>
+				<p class="text-gray-700 mb-6">
+					Active Flood Warning for your area. Heavy rainfall is
+					expected. Low-lying areas are at high risk. Evacuate
+					immediately if you are in a high-risk zone.
+				</p>
+				<button
+					id="close-alert-btn"
+					class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-8 rounded-full"
+				>
+					OK
+				</button>
+			</div>
+		</div>
+
+		<div
+			id="message-modal"
+			class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1001]"
+		>
+			<div class="ui-panel p-6 w-11/12 md:w-1/3">
+				<h3
+					id="modal-title"
+					class="text-xl font-bold mb-4 text-center text-gray-800"
+				>
+					Notification
+				</h3>
+				<div id="modal-content" class="mb-6 text-gray-700">
+					<p id="modal-message" class="text-left whitespace-pre-wrap">
+						This is a message.
+					</p>
+					<div id="modal-loader" class="hidden mx-auto loader"></div>
+				</div>
+				<div id="modal-buttons" class="text-center space-x-4">
+					<button
+						id="modal-cancel-btn"
+						class="hidden bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-full"
+					>
+						Cancel
+					</button>
+					<button
+						id="modal-confirm-btn"
+						class="hidden bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-full"
+					>
+						Delete
+					</button>
+					<button
+						id="modal-close-btn"
+						class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-8 rounded-full"
+					>
+						OK
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- Firebase -->
+		<script type="module">
+			import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+			import {
+				getDatabase,
+				ref,
+				onValue,
+				remove,
+			} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+
+			const firebaseConfig = {
+				apiKey: '',
+				authDomain: '',
+				databaseURL: '',
+				projectId: '',
+				storageBucket: '',
+				messagingSenderId: '',
+				appId: '',
+			};
+			const app = initializeApp(firebaseConfig);
+			const db = getDatabase(app);
+
+			document.addEventListener('DOMContentLoaded', function () {
+				// --- 1. CONFIG AND INITIALIZATION ---
+				const OPENWEATHER_API_KEY = '';
+				const MAPTILER_API_KEY = '';
+				const map = L.map('map').setView([31.634, 74.8723], 13);
+				let currentUserLocation = map.getCenter();
+				let currentAlertLevel = 'Safe';
+				let currentLocationName = 'Amritsar';
+				let simulationLayer = null;
+				let userLocationMarker = null;
+
+				const maptilerStreet = L.tileLayer(
+					`https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${MAPTILER_API_KEY}`,
+					{
+						attribution:
+							'&copy; <a href="https://www.maptiler.com/copyright/" target="_blank">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap contributors</a>',
+					}
+				);
+
+				const satelliteLayer = L.tileLayer(
+					'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+					{
+						attribution:
+							'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+					}
+				);
+
+				maptilerStreet.addTo(map);
+
+				L.control
+					.layers({
+						'Street View': maptilerStreet,
+						'Satellite View': satelliteLayer,
+					})
+					.addTo(map);
+
+				let sheltersLayer = L.layerGroup().addTo(map);
+				let historicalLayer;
+
+				// --- 2. DYNAMIC STYLING AND FEATURE MANAGEMENT ---
+				const getFloodPolygonStyle = (feature) => {
+					switch (feature.properties.risk) {
+						case 'High':
+							return {
+								color: '#ef4444',
+								weight: 1,
+								fillColor: '#ef4444',
+								fillOpacity: 0.7,
+							};
+						case 'Moderate':
+							return {
+								color: '#facc15',
+								weight: 1,
+								fillColor: '#facc15',
+								fillOpacity: 0.7,
+							};
+						case 'Low':
+							return {
+								color: '#9ca3af',
+								weight: 1,
+								fillColor: '#9ca3af',
+								fillOpacity: 0.7,
+							};
+						case 'Very Low':
+							return {
+								color: '#4ade80',
+								weight: 1,
+								fillColor: '#4ade80',
+								fillOpacity: 0.7,
+							};
+						default:
+							return {
+								color: '#3b82f6',
+								weight: 1,
+								fillColor: '#60a5fa',
+								fillOpacity: 0.5,
+							};
+					}
+				};
+
+				// --- REAL-TIME SHELTER LISTENER (REALTIME DATABASE) ---
+				const shelterIcon = L.divIcon({
+					html: '<i class="fas fa-house-chimney-medical text-3xl text-green-600"></i>',
+					className: '',
+					iconSize: [30, 30],
+					iconAnchor: [15, 30],
+					popupAnchor: [0, -30],
+				});
+				const sheltersRef = ref(db, 'shelters');
+				onValue(sheltersRef, (snapshot) => {
+					sheltersLayer.clearLayers();
+					const shelters = snapshot.val();
+					if (shelters) {
+						Object.entries(shelters).forEach(([id, shelter]) => {
+							const marker = L.marker(
+								[shelter.lat, shelter.lng],
+								{ icon: shelterIcon }
+							);
+
+							const popupContent = `
+                            <div class="p-1">
+                                <strong class="text-lg text-gray-800">Safe Shelter</strong><br><span class="text-gray-600">${shelter.name}</span>
+                                <div class="flex space-x-2 mt-3">
+                                    <button class="flex-1 bg-indigo-500 text-white text-sm font-semibold py-2 px-3 rounded-lg hover:bg-indigo-600" 
+                                            onclick="narrateRouteToShelter('${shelter.name}', 'en-US')">
+                                        <i class="fas fa-volume-up"></i> English
+                                    </button>
+                                     <button class="flex-1 bg-orange-500 text-white text-sm font-semibold py-2 px-3 rounded-lg hover:bg-orange-600" 
+                                            onclick="narrateRouteToShelter('${shelter.name}', 'hi-IN')">
+                                        <i class="fas fa-volume-up"></i> हिन्दी
+                                    </button>
+                                </div>
+                                <div class="mt-2 flex space-x-2">
+                                     <button class="flex-1 bg-green-500 text-white text-sm font-semibold py-2 px-3 rounded-lg hover:bg-green-600"
+                                            onclick="openGoogleMaps(${shelter.lat}, ${shelter.lng})">
+                                        <i class="fas fa-map-location-dot"></i> Maps
+                                    </button>
+                                    <button class="flex-1 bg-red-500 text-white text-sm font-semibold py-2 px-3 rounded-lg hover:bg-red-600"
+                                            onclick="confirmRemoveShelter('${id}', '${shelter.name}')">
+                                        <i class="fas fa-trash-alt"></i> Remove
+                                    </button>
+                                </div>
+                            </div>`;
+							marker.bindPopup(popupContent);
+							sheltersLayer.addLayer(marker);
+						});
+					}
+				});
+
+				const setupMapFeatures = (center) => {
+					const { lat, lng } = center;
+
+					const historicalFloodLocations = [
+						{
+							name: 'Ghonewal',
+							lat: 31.7833,
+							lng: 74.8333,
+							flood_level: 60,
+							radius: 1500,
+						},
+						{
+							name: 'Gurchak',
+							lat: 31.75,
+							lng: 74.9167,
+							flood_level: 65,
+							radius: 1500,
+						},
+						{
+							name: 'Makoura',
+							lat: 31.795,
+							lng: 74.885,
+							flood_level: 70,
+							radius: 1500,
+						},
+						{
+							name: 'Toor',
+							lat: 31.8136,
+							lng: 74.5873,
+							flood_level: 60,
+							radius: 1500,
+						},
+						{
+							name: 'Gatti Rajo Ke',
+							lat: 30.885,
+							lng: 74.455,
+							flood_level: 80,
+							radius: 1500,
+						},
+						{
+							name: 'Tendi Wala',
+							lat: 30.855,
+							lng: 74.555,
+							flood_level: 85,
+							radius: 1500,
+						},
+						{
+							name: 'Kukkar Pind',
+							lat: 31.2599,
+							lng: 75.6624,
+							flood_level: 50,
+							radius: 1500,
+						},
+						{
+							name: 'Qadianwali',
+							lat: 31.2485,
+							lng: 75.5755,
+							flood_level: 55,
+							radius: 1500,
+						},
+						{
+							name: 'Sarnana',
+							lat: 31.3329,
+							lng: 75.6985,
+							flood_level: 50,
+							radius: 1500,
+						},
+						{
+							name: 'Sangra (Sultanpur Lodhi)',
+							lat: 31.255,
+							lng: 75.225,
+							flood_level: 75,
+							radius: 1500,
+						},
+						{
+							name: 'Dudhan Sadhan',
+							lat: 30.15,
+							lng: 76.53,
+							flood_level: 90,
+							radius: 1500,
+						},
+						{
+							name: 'Dharamheri',
+							lat: 30.385,
+							lng: 76.605,
+							flood_level: 85,
+							radius: 1500,
+						},
+						{
+							name: 'Amritsar',
+							lat: 31.633,
+							lng: 74.8723,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Bathinda',
+							lat: 30.211,
+							lng: 74.9455,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Faridkot',
+							lat: 30.6751,
+							lng: 74.7553,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Fatehgarh Sahib',
+							lat: 30.6473,
+							lng: 76.3884,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Fazilka',
+							lat: 30.4035,
+							lng: 74.0252,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Ferozepur',
+							lat: 30.9239,
+							lng: 74.6091,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Gurdaspur',
+							lat: 32.0422,
+							lng: 75.4042,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Hoshiarpur',
+							lat: 31.5311,
+							lng: 75.9189,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Jalandhar',
+							lat: 31.326,
+							lng: 75.5762,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Kapurthala',
+							lat: 31.3789,
+							lng: 75.3853,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Ludhiana',
+							lat: 30.901,
+							lng: 75.8573,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Mansa',
+							lat: 29.9868,
+							lng: 75.3883,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Moga',
+							lat: 30.8045,
+							lng: 75.1729,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Pathankot',
+							lat: 32.2683,
+							lng: 75.6491,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Patiala',
+							lat: 30.3398,
+							lng: 76.3869,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Rupnagar',
+							lat: 30.9667,
+							lng: 76.5333,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Sangrur',
+							lat: 30.2505,
+							lng: 75.8398,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'SAS Nagar (Mohali)',
+							lat: 30.7041,
+							lng: 76.7179,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'SBS Nagar (Nawanshahr)',
+							lat: 31.1249,
+							lng: 76.1157,
+							flood_level: 40,
+							radius: 5000,
+						},
+						{
+							name: 'Tarn Taran',
+							lat: 31.4544,
+							lng: 74.9272,
+							flood_level: 40,
+							radius: 5000,
+						},
+					];
+					const historicalLayers = historicalFloodLocations.map(
+						(flood) => {
+							return L.circle([flood.lat, flood.lng], {
+								radius: flood.radius,
+								color: '#3b82f6',
+								fillColor: '#60a5fa',
+								fillOpacity: 0.5,
+							}).bindPopup(
+								`<strong>Historical Flood Site:</strong><br>${flood.name}<br>Past Flood Level: ${flood.flood_level}`
+							);
+						}
+					);
+					historicalLayer = L.layerGroup(historicalLayers);
+
+					document.getElementById('risk-zones-toggle').onchange = (
+						e
+					) => toggleLayer(simulationLayer, e.target.checked);
+					document.getElementById('shelters-toggle').onchange = (e) =>
+						toggleLayer(sheltersLayer, e.target.checked);
+					document.getElementById('historical-toggle').onchange = (
+						e
+					) => toggleLayer(historicalLayer, e.target.checked);
+				};
+
+				const toggleLayer = (layer, isVisible) => {
+					if (isVisible && layer) map.addLayer(layer);
+					else if (layer) map.removeLayer(layer);
+				};
+
+				const updateAlertLevel = (rainfall) => {
+					const alertStatusEl =
+						document.getElementById('alert-status');
+					const alertBox = document.getElementById('alert-box');
+					let colorClass;
+
+					if (rainfall > 15) {
+						currentAlertLevel = 'Warning';
+						colorClass = 'bg-red-500/80';
+					} else if (rainfall > 5) {
+						currentAlertLevel = 'Watch';
+						colorClass = 'bg-yellow-400/80';
+					} else {
+						currentAlertLevel = 'Safe';
+						colorClass = 'bg-green-500/80';
+					}
+
+					alertStatusEl.textContent = currentAlertLevel;
+					alertStatusEl.className = `p-3 rounded-xl text-center text-white font-bold text-lg transition-colors duration-500 ${colorClass} mb-3`;
+
+					if (currentAlertLevel === 'Warning') {
+						alertBox.classList.remove('hidden');
+					} else {
+						alertBox.classList.add('hidden');
+					}
+				};
+
+				const fetchAndDisplayWeather = async (lat, lng) => {
+					const apiUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${OPENWEATHER_API_KEY}&units=metric`;
+					try {
+						const response = await fetch(apiUrl);
+						if (!response.ok)
+							throw new Error(`HTTP ${response.status}`);
+						const data = await response.json();
+
+						currentLocationName = data.name;
+						document.getElementById('location-name').textContent =
+							currentLocationName;
+						document.getElementById(
+							'weather-description'
+						).textContent = data.weather[0].description;
+						document.getElementById(
+							'weather-temp'
+						).innerHTML = `${Math.round(data.main.temp)}&deg;C`;
+						const rainfall1h =
+							data.rain && data.rain['1h'] ? data.rain['1h'] : 0;
+						document.getElementById(
+							'weather-rainfall'
+						).textContent = `Rainfall (1h): ${rainfall1h} mm`;
+
+						const rainfallSlider =
+							document.getElementById('rainfall-slider');
+						rainfallSlider.value = rainfall1h;
+						rainfallValue.textContent = `${rainfall1h} mm/hr`;
+						updateAlertLevel(rainfall1h);
+					} catch (error) {
+						showModal(
+							'Weather Error',
+							`Could not fetch live weather data. ${error.message}`
+						);
+					}
+				};
+
+				window.openGoogleMaps = (shelterLat, shelterLng) => {
+					const userLat = currentUserLocation.lat;
+					const userLng = currentUserLocation.lng;
+					const url = `https://www.google.com/maps/dir/?api=1&origin=${userLat},${userLng}&destination=${shelterLat},${shelterLng}&travelmode=driving`;
+					window.open(url, '_blank');
+				};
+
+				window.confirmRemoveShelter = (shelterId, shelterName) => {
+					showModal(
+						'Confirm Deletion',
+						`Are you sure you want to remove the shelter "${shelterName}"?`,
+						{
+							confirmText: 'Delete',
+							onConfirm: () => {
+								const shelterRef = ref(
+									db,
+									'shelters/' + shelterId
+								);
+								remove(shelterRef)
+									.then(() => {
+										showModal(
+											'Success',
+											`Shelter "${shelterName}" has been removed.`
+										);
+										map.closePopup();
+									})
+									.catch((error) => {
+										showModal(
+											'Error',
+											`Could not remove shelter: ${error.message}`
+										);
+									});
+							},
+						}
+					);
+				};
+
+				const getSafetyReport = async () => {
+					showModal('✨ AI Safety Briefing', '', { isLoading: true });
+					const rainfall =
+						document.getElementById('rainfall-slider').value;
+					const systemPrompt =
+						"You are a disaster management expert. Provide a concise, actionable safety briefing for a citizen based on their current flood risk situation. Use clear, simple language. Structure your response with a title, a summary of the situation, and 3-4 bullet points with specific safety recommendations. Do not use markdown's hash symbols for titles or asterisks for lists.";
+					const userQuery = `My location is ${currentLocationName}. The flood alert level is currently '${currentAlertLevel}' with a simulated rainfall of ${rainfall} mm/hour. What should I do?`;
+
+					const apiKey = '';
+					const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+					const payload = {
+						contents: [{ parts: [{ text: userQuery }] }],
+						systemInstruction: { parts: [{ text: systemPrompt }] },
+					};
+
+					try {
+						const response = await fetch(apiUrl, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify(payload),
+						});
+						if (!response.ok)
+							throw new Error(
+								`API Error: ${response.statusText}`
+							);
+						const result = await response.json();
+						const text =
+							result.candidates?.[0]?.content?.parts?.[0]?.text;
+						if (!text)
+							throw new Error('No content received from AI.');
+						showModal('✨ AI Safety Briefing', text);
+					} catch (error) {
+						showModal(
+							'AI Error',
+							`Could not generate the safety report. ${error.message}`
+						);
+					}
+				};
+
+				window.narrateRouteToShelter = async (
+					shelterName,
+					language
+				) => {
+					showModal(`✨ Narrating Route to ${shelterName}`, '', {
+						isLoading: true,
+					});
+
+					let promptText;
+					if (language === 'hi-IN') {
+						promptText = `TTS the following instructions in Hindi, clearly and calmly: "${shelterName} तक पहुँचने के लिए, उसकी ओर बढ़ना शुरू करें। आश्रय आपके वर्तमान स्थान से उत्तर-पूर्व में स्थित है। यह एक सामान्य गाइड है; कृपया मुख्य सड़कों का उपयोग करें और आधिकारिक संकेतों को देखें। सुरक्षित रहें।"`;
+					} else {
+						promptText = `TTS the following instructions clearly and calmly: "To get to the ${shelterName}, start by heading towards it. The shelter is located northeast of your current position. This is a general guide; please use main roads and look for official signs. Stay safe."`;
+					}
+
+					const payload = {
+						contents: [{ parts: [{ text: promptText }] }],
+						generationConfig: {
+							responseModalities: ['AUDIO'],
+							speechConfig: {
+								voiceConfig: {
+									prebuiltVoiceConfig: { voiceName: 'Kore' },
+								},
+							},
+						},
+						model: 'gemini-2.5-flash-preview-tts',
+					};
+					const apiKey = '';
+					const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+
+					try {
+						const response = await fetch(apiUrl, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify(payload),
+						});
+						if (!response.ok)
+							throw new Error(
+								`API Error: ${response.statusText}`
+							);
+						const result = await response.json();
+						const part =
+							result?.candidates?.[0]?.content?.parts?.[0];
+						const audioData = part?.inlineData?.data;
+						const mimeType = part?.inlineData?.mimeType;
+
+						if (audioData && mimeType?.startsWith('audio/')) {
+							const sampleRate = parseInt(
+								mimeType.match(/rate=(\d+)/)[1],
+								10
+							);
+							const pcmData = base64ToArrayBuffer(audioData);
+							const pcm16 = new Int16Array(pcmData);
+							const wavBlob = pcmToWav(pcm16, 1, sampleRate);
+							const audioUrl = URL.createObjectURL(wavBlob);
+
+							document.getElementById('tts-audio').src = audioUrl;
+							document.getElementById('tts-audio').play();
+							showModal(
+								`✨ Route to ${shelterName}`,
+								'Audio narration is playing now.'
+							);
+						} else {
+							throw new Error('Invalid audio data received.');
+						}
+					} catch (error) {
+						showModal(
+							'Audio Error',
+							`Could not narrate the route. ${error.message}`
+						);
+					}
+				};
+
+				const base64ToArrayBuffer = (base64) => {
+					const binary_string = window.atob(base64);
+					const len = binary_string.length;
+					const bytes = new Uint8Array(len);
+					for (let i = 0; i < len; i++) {
+						bytes[i] = binary_string.charCodeAt(i);
+					}
+					return bytes.buffer;
+				};
+
+				const pcmToWav = (pcmData, numChannels, sampleRate) => {
+					const buffer = new ArrayBuffer(44 + pcmData.length * 2);
+					const view = new DataView(buffer);
+					const writeString = (v, o, s) => {
+						for (let i = 0; i < s.length; i++)
+							v.setUint8(o + i, s.charCodeAt(i));
+					};
+					writeString(view, 0, 'RIFF');
+					view.setUint32(4, 36 + pcmData.length * 2, true);
+					writeString(view, 8, 'WAVE');
+					writeString(view, 12, 'fmt ');
+					view.setUint32(16, 16, true);
+					view.setUint16(20, 1, true);
+					view.setUint16(22, numChannels, true);
+					view.setUint32(24, sampleRate, true);
+					view.setUint32(28, sampleRate * numChannels * 2, true);
+					view.setUint16(32, numChannels * 2, true);
+					view.setUint16(34, 16, true);
+					writeString(view, 36, 'data');
+					view.setUint32(40, pcmData.length * 2, true);
+					for (let i = 0; i < pcmData.length; i++) {
+						view.setInt16(44 + i * 2, pcmData[i], true);
+					}
+					return new Blob([view], { type: 'audio/wav' });
+				};
+
+				const updateLocationBasedData = (center) => {
+					currentUserLocation = center;
+					if (userLocationMarker) {
+						map.removeLayer(userLocationMarker);
+					}
+					const userIcon = L.divIcon({
+						html: '<i class="fas fa-street-view text-3xl text-blue-600"></i>',
+						className: '',
+						iconSize: [30, 30],
+						iconAnchor: [15, 30],
+					});
+					userLocationMarker = L.marker([center.lat, center.lng], {
+						icon: userIcon,
+					})
+						.addTo(map)
+						.bindPopup('Your Location')
+						.openPopup();
+
+					setupMapFeatures(center);
+					fetchAndDisplayWeather(center.lat, center.lng);
+				};
+
+				const showModal = (title, message, options = {}) => {
+					const {
+						isLoading = false,
+						onConfirm = null,
+						confirmText = 'Confirm',
+					} = options;
+
+					document.getElementById('modal-title').innerText = title;
+					document.getElementById('modal-message').innerText =
+						message;
+					document
+						.getElementById('message-modal')
+						.classList.remove('hidden');
+
+					document
+						.getElementById('modal-loader')
+						.classList.toggle('hidden', !isLoading);
+					document
+						.getElementById('modal-message')
+						.classList.toggle('hidden', isLoading);
+
+					const confirmBtn =
+						document.getElementById('modal-confirm-btn');
+					const cancelBtn =
+						document.getElementById('modal-cancel-btn');
+					const closeBtn = document.getElementById('modal-close-btn');
+
+					if (onConfirm) {
+						confirmBtn.innerText = confirmText;
+						confirmBtn.classList.remove('hidden');
+						cancelBtn.classList.remove('hidden');
+						closeBtn.classList.add('hidden');
+
+						confirmBtn.onclick = () => {
+							onConfirm();
+							document
+								.getElementById('message-modal')
+								.classList.add('hidden');
+						};
+						cancelBtn.onclick = () =>
+							document
+								.getElementById('message-modal')
+								.classList.add('hidden');
+					} else {
+						confirmBtn.classList.add('hidden');
+						cancelBtn.classList.add('hidden');
+						closeBtn.classList.remove('hidden');
+						closeBtn.onclick = () =>
+							document
+								.getElementById('message-modal')
+								.classList.add('hidden');
+					}
+				};
+
+				document.getElementById('close-alert-btn').onclick = () =>
+					document
+						.getElementById('alert-box')
+						.classList.add('hidden');
+				document.getElementById('ai-briefing-btn').onclick =
+					getSafetyReport;
+
+				map.locate({ setView: true, maxZoom: 16 });
+				map.on('locationfound', (e) => {
+					updateLocationBasedData(e.latlng);
+				});
+				map.on('locationerror', () => {
+					showModal(
+						'Location Error',
+						'Could not find your location. Displaying features for default area.'
+					);
+					updateLocationBasedData(map.getCenter());
+				});
+
+				const searchControl = new GeoSearch.GeoSearchControl({
+					provider: new GeoSearch.OpenStreetMapProvider(),
+					style: 'bar',
+					showMarker: true,
+					marker: { draggable: false },
+					autoClose: true,
+					keepResult: true,
+				});
+				map.addControl(searchControl);
+				map.on('geosearch/showlocation', (result) => {
+					const loc = L.latLng(result.location.y, result.location.x);
+					updateLocationBasedData(loc);
+				});
+
+				const rainfallSlider =
+					document.getElementById('rainfall-slider');
+				const rainfallValue = document.getElementById('rainfall-value');
+				const runSimulationBtn =
+					document.getElementById('run-simulation-btn');
+
+				async function runRealSimulation() {
+					if (simulationLayer) {
+						map.removeLayer(simulationLayer);
+						simulationLayer = null;
+					}
+
+					const rainfall = parseFloat(rainfallSlider.value);
+					if (rainfall === 0) return;
+
+					showModal(
+						'Running Simulation',
+						'Fetching elevation data and calculating flood extent...',
+						{ isLoading: true }
+					);
+
+					const radiusMeters = 5000;
+					const latOffset = radiusMeters / 111320;
+					const lngOffset =
+						radiusMeters /
+						(111320 *
+							Math.cos(
+								(currentUserLocation.lat * Math.PI) / 180
+							));
+
+					const bounds = L.latLngBounds(
+						[
+							currentUserLocation.lat - latOffset,
+							currentUserLocation.lng - lngOffset,
+						],
+						[
+							currentUserLocation.lat + latOffset,
+							currentUserLocation.lng + lngOffset,
+						]
+					);
+
+					const gridSize = 70; // Increased grid size for more detail
+					const locations = [];
+					const lngStep =
+						(bounds.getEast() - bounds.getWest()) / gridSize;
+					const latStep =
+						(bounds.getNorth() - bounds.getSouth()) / gridSize;
+
+					for (let i = 0; i < gridSize; i++) {
+						for (let j = 0; j < gridSize; j++) {
+							locations.push({
+								latitude: bounds.getSouth() + i * latStep,
+								longitude: bounds.getWest() + j * lngStep,
+							});
+						}
+					}
+
+					try {
+						// 1. Fetch Elevation Data
+						const elevationResponse = await fetch(
+							'https://api.open-elevation.com/api/v1/lookup',
+							{
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json' },
+								body: JSON.stringify({ locations }),
+							}
+						);
+						if (!elevationResponse.ok)
+							throw new Error('Failed to fetch elevation data.');
+						const elevationData = await elevationResponse.json();
+
+						// --- ENHANCEMENT: Prioritize user's immediate area ---
+						const userGridX = Math.floor(
+							(currentUserLocation.lng - bounds.getWest()) /
+								lngStep
+						);
+						const userGridY = Math.floor(
+							(currentUserLocation.lat - bounds.getSouth()) /
+								latStep
+						);
+
+						const nearbyUserCellsIndices = [];
+						let nearbyElevationSum = 0;
+						let nearbyValidCellCount = 0;
+
+						for (let i = -5; i <= 5; i++) {
+							// Check a 11x11 square around the user
+							for (let j = -5; j <= 5; j++) {
+								const y = userGridY + i;
+								const x = userGridX + j;
+								if (
+									y >= 0 &&
+									y < gridSize &&
+									x >= 0 &&
+									x < gridSize
+								) {
+									const index = y * gridSize + x;
+									if (
+										elevationData.results[index] &&
+										elevationData.results[index]
+											.elevation !== null
+									) {
+										nearbyUserCellsIndices.push(index);
+										nearbyElevationSum +=
+											elevationData.results[index]
+												.elevation;
+										nearbyValidCellCount++;
+									}
+								}
+							}
+						}
+
+						const avgUserElevation =
+							nearbyValidCellCount > 0
+								? nearbyElevationSum / nearbyValidCellCount
+								: null;
+
+						if (avgUserElevation !== null) {
+							nearbyUserCellsIndices.forEach((index) => {
+								if (elevationData.results[index]) {
+									// Set the elevation of nearby cells to the average to create a smoother, more connected local zone
+									elevationData.results[index].elevation =
+										avgUserElevation;
+								}
+							});
+						}
+						// --- END ENHANCEMENT ---
+
+						const terrainCells = elevationData.results
+							.map((result, index) => ({
+								point: [
+									locations[index].longitude,
+									locations[index].latitude,
+								],
+								elevation: result.elevation,
+							}))
+							.filter((cell) => cell.elevation !== null)
+							.sort((a, b) => a.elevation - b.elevation);
+
+						if (terrainCells.length === 0)
+							throw new Error(
+								'No valid elevation data found for this area.'
+							);
+
+						// 2. Simplified Flood Fill Logic
+						const cellArea =
+							lngStep *
+							111320 *
+							(latStep *
+								111320 *
+								Math.cos(
+									(currentUserLocation.lat * Math.PI) / 180
+								));
+						const totalWaterVolume =
+							cellArea * terrainCells.length * (rainfall / 1000);
+
+						let cumulativeVolume = 0;
+						let finalFloodLevel = terrainCells[0].elevation;
+
+						for (let i = 1; i < terrainCells.length; i++) {
+							const levelDifference =
+								terrainCells[i].elevation -
+								terrainCells[i - 1].elevation;
+							const volumeToFill = levelDifference * i * cellArea;
+							if (
+								cumulativeVolume + volumeToFill >=
+								totalWaterVolume
+							) {
+								const remainingVolume =
+									totalWaterVolume - cumulativeVolume;
+								finalFloodLevel =
+									terrainCells[i - 1].elevation +
+									remainingVolume / (i * cellArea);
+								break;
+							}
+							cumulativeVolume += volumeToFill;
+							finalFloodLevel = terrainCells[i].elevation;
+						}
+
+						const floodFeatures = [];
+						elevationData.results.forEach((result, index) => {
+							if (result.elevation < finalFloodLevel) {
+								const south = locations[index].latitude;
+								const west = locations[index].longitude;
+
+								const polygon = L.polygon([
+									[south, west],
+									[south + latStep, west],
+									[south + latStep, west + lngStep],
+									[south, west + lngStep],
+								]).toGeoJSON();
+
+								const waterDepth =
+									finalFloodLevel - result.elevation;
+								let risk = 'Very Low';
+								if (waterDepth > 2) risk = 'High';
+								else if (waterDepth > 0.5) risk = 'Moderate';
+								else if (waterDepth > 0.1) risk = 'Low';
+
+								polygon.properties = {
+									risk: risk,
+									depth: waterDepth,
+								};
+								floodFeatures.push(polygon);
+							}
+						});
+
+						if (floodFeatures.length > 0) {
+							const polygons = floodFeatures.map((f) => {
+								const layer = L.geoJSON(f, {
+									style: getFloodPolygonStyle(f),
+								});
+								layer.on('click', (e) => {
+									const props = e.layer.feature.properties;
+									L.popup()
+										.setLatLng(e.latlng)
+										.setContent(
+											`Risk: ${
+												props.risk
+											}<br>Est. Depth: ${props.depth.toFixed(
+												2
+											)}m`
+										)
+										.openOn(map);
+								});
+								return layer;
+							});
+							simulationLayer =
+								L.featureGroup(polygons).addTo(map);
+
+							showModal(
+								'Simulation Complete',
+								`Flood extent visualized for ${rainfall} mm/hr rainfall.`
+							);
+						} else {
+							showModal(
+								'Simulation Complete',
+								'No significant flooding predicted for this rainfall amount in the visible area.'
+							);
+						}
+					} catch (error) {
+						console.error('Simulation Error:', error);
+						showModal(
+							'Simulation Failed',
+							`An error occurred: ${error.message}`
+						);
+					}
+				}
+
+				rainfallSlider.oninput = (e) => {
+					const rainfall = parseFloat(e.target.value);
+					rainfallValue.textContent = `${rainfall} mm/hr`;
+					updateAlertLevel(rainfall);
+				};
+				runSimulationBtn.onclick = runRealSimulation;
+
+				// Initial setup
+				updateLocationBasedData(currentUserLocation);
+			});
+		</script>
+	</body>
+</html>
