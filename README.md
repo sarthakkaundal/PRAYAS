@@ -75,7 +75,7 @@ The system architecture flows from data ingestion to user action:
 1. Clone the Repository
 
 ~~~BASH
-git clone https://github.com/suryanandanbabbar/PRAYAS.git
+git clone https://github.com/sarthakkaundal/PRAYAS.git
 cd PRAYAS
 ~~~
 
