@@ -495,3 +495,99 @@ body {
 
 /* Keep reports working until next phase */
 .reports-container { padding: 20px; }
+
+/* Global Forms */
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-label {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.form-input, .form-textarea, .form-select {
+    width: 100%;
+    background: var(--bg-surface);
+    border: 1px solid var(--grid-border);
+    padding: 0.75rem;
+    color: var(--text-primary);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1rem;
+    outline: none;
+    transition: var(--transition-snap);
+}
+
+.form-input:focus, .form-textarea:focus, .form-select:focus {
+    border-color: var(--accent-volt);
+    background: var(--bg-base);
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-surface);
+    border: 1px solid var(--grid-border);
+    padding: 0.75rem 1.5rem;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition-snap);
+}
+
+.btn:hover {
+    background: var(--accent-volt);
+    color: var(--text-inverse);
+    border-color: var(--accent-volt);
+}
+
+.btn-primary {
+    border-color: var(--text-primary);
+}
+
+.btn-danger {
+    color: var(--status-danger);
+    border-color: var(--status-danger);
+}
+.btn-danger:hover {
+    background: var(--status-danger);
+    color: var(--text-inverse);
+    border-color: var(--status-danger);
+}
+
+/* Page Headers */
+.page-header {
+    padding: 2rem;
+    border-bottom: 1px solid var(--grid-border);
+    background: var(--bg-base);
+}
+
+.page-title {
+    font-size: 2.5rem;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+}
+
+.page-subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+/* Dashboard Grid extended */
+.content-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+}
+@media (min-width: 768px) {
+    .content-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
