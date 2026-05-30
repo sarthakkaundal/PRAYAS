@@ -1,4 +1,4 @@
-/* Industrial Blueprint Variables */
+/* Industrial Blueprint Variables (Dark Mode Default) */
 :root {
     --bg-base: #0a0a0a;
     --bg-surface: #141414;
@@ -16,6 +16,24 @@
     --status-danger: #ff2a55;
 
     --transition-snap: all 0s linear;
+}
+
+/* Technical Draft Variables (Light Mode) */
+[data-theme="light"] {
+    --bg-base: #ffffff;
+    --bg-surface: #f0f0f0;
+    --grid-border: #000000;
+    
+    --text-primary: #000000;
+    --text-secondary: #666666;
+    --text-inverse: #ffffff;
+    
+    --accent-volt: #0033ff; /* Electric Blueprint Blue */
+    --accent-volt-dim: rgba(0, 51, 255, 0.1);
+    
+    --status-success: #00aa55;
+    --status-warning: #dd7700;
+    --status-danger: #ee0000;
 }
 
 /* Base structural reset */

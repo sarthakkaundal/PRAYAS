@@ -6,7 +6,7 @@ import Help from './pages/Help';
 import Fund from './pages/Fund'; // Import the Fund component
 
 // Header Component
-const Header = ({ setCurrentPage, currentPage }) => {
+const Header = ({ setCurrentPage, currentPage, theme, toggleTheme }) => {
 	const [currentTime, setCurrentTime] = useState('');
 
 	useEffect(() => {
@@ -80,6 +80,17 @@ const Header = ({ setCurrentPage, currentPage }) => {
 						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.5 4.5a1 1 0 01-.217 1.013l-2.1 2.1a11.042 11.042 0 005.516 5.516l2.1-2.1a1 1 0 011.013-.217l4.5 1.5a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.163 21 3 14.837 3 7V5z" />
 					</svg>
 					<span>Contact</span>
+				</div>
+
+				<div
+					className="icon-card"
+					onClick={toggleTheme}
+					style={{ cursor: 'pointer', borderLeft: '1px solid var(--grid-border)' }}
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" className="icon-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d={theme === 'light' ? "M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" : "M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"} />
+					</svg>
+					<span>{theme === 'light' ? 'NIGHT_MODE' : 'DAY_MODE'}</span>
 				</div>
 
 				{currentPage !== 'dashboard' && (
@@ -388,6 +399,16 @@ const NewsList = () => {
 // Main App Component
 const App = () => {
 	const [currentPage, setCurrentPage] = useState('dashboard'); // default view
+	const [theme, setTheme] = useState(localStorage.getItem('prayas-theme') || 'dark');
+
+	useEffect(() => {
+		document.documentElement.setAttribute('data-theme', theme);
+		localStorage.setItem('prayas-theme', theme);
+	}, [theme]);
+
+	const toggleTheme = () => {
+		setTheme(prev => prev === 'light' ? 'dark' : 'light');
+	};
 
 	// Render dashboard content
 	const renderDashboard = () => (
@@ -414,6 +435,8 @@ const App = () => {
 			<Header
 				setCurrentPage={setCurrentPage}
 				currentPage={currentPage}
+				theme={theme}
+				toggleTheme={toggleTheme}
 			/>
 
 			{/* Conditional rendering based on current page */}
