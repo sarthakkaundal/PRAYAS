@@ -51,9 +51,9 @@ const Map = () => {
   return (
     <div style={{ width: '100%' }}>
       {!isFullscreen && (
-        <div className="page-header">
-          <h1 className="page-title">Topographic Data</h1>
-          <p className="page-subtitle">SATELLITE & SENSOR OVERLAY MATRIX</p>
+        <div className="p-8 border-b border-grid bg-base">
+          <h1 className="text-2xl font-bold uppercase tracking-wider mb-2">Topographic Data</h1>
+          <p className="font-mono text-sm text-secondary uppercase">SATELLITE & SENSOR OVERLAY MATRIX</p>
         </div>
       )}
 
@@ -61,8 +61,7 @@ const Map = () => {
         <div style={controlsStyle}>
           <button
             onClick={toggleFullscreen}
-            className="btn"
-            style={{ padding: '0.5rem', borderRight: 'none' }}
+            className="bg-transparent border border-grid px-3 py-1 text-[10px] text-primary font-mono uppercase font-bold cursor-pointer transition-snap hover:bg-surface border-r-0"
             title={isFullscreen ? "EXIT FULLSCREEN (ESC)" : "ENTER FULLSCREEN"}
           >
             {isFullscreen ? 'SHRINK' : 'EXPAND'}
@@ -70,8 +69,7 @@ const Map = () => {
           
           <button
             onClick={() => window.location.reload()}
-            className="btn"
-            style={{ padding: '0.5rem' }}
+            className="bg-transparent border border-grid px-3 py-1 text-[10px] text-primary font-mono uppercase font-bold cursor-pointer transition-snap hover:bg-surface"
             title="REFRESH TELEMETRY"
           >
             SYNC

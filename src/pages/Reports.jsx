@@ -69,53 +69,51 @@ const Reports = () => {
 
   return (
     <div style={{ width: '100%' }}>
-      <div className="page-header">
-        <h1 className="page-title">Report Management</h1>
-        <p className="page-subtitle">SUBMIT AND TRACK COMMUNITY DISASTER LOGS</p>
+      <div className="p-8 border-b border-grid bg-base">
+        <h1 className="text-2xl font-bold uppercase tracking-wider mb-2">Report Management</h1>
+        <p className="font-mono text-sm text-secondary uppercase">SUBMIT AND TRACK COMMUNITY DISASTER LOGS</p>
       </div>
 
-      <div className="header" style={{ borderTop: 'none', background: 'var(--bg-base)' }}>
-        <div 
-          className={`icon-card ${currentView === 'submit' ? 'active' : ''}`} 
-          style={{ width: '50%', borderLeft: 'none' }}
+      <div className="flex w-full border-b border-grid bg-base">
+        <button 
+          className={`flex-1 p-4 text-center font-mono text-sm uppercase font-bold transition-snap ${currentView === 'submit' ? 'bg-volt text-inverse' : 'bg-base text-primary hover:bg-volt-dim'}`}
           onClick={() => setCurrentView('submit')}
         >
-          <span>WRITE_LOG</span>
-        </div>
-        <div 
-          className={`icon-card ${currentView === 'view' ? 'active' : ''}`} 
-          style={{ width: '50%' }}
+          WRITE_LOG
+        </button>
+        <button 
+          className={`flex-1 p-4 text-center font-mono text-sm uppercase font-bold transition-snap ${currentView === 'view' ? 'bg-volt text-inverse' : 'bg-base text-primary hover:bg-volt-dim'}`}
           onClick={() => setCurrentView('view')}
         >
-          <span>VIEW_LOGS ({reports.length})</span>
-        </div>
+          VIEW_LOGS ({reports.length})
+        </button>
       </div>
 
       {currentView === 'submit' && (
-        <div className="card" style={{ borderRight: 'none', borderBottom: 'none' }}>
-          <div className="card-header">
-            <h2 className="card-title">NEW_ENTRY_FORM</h2>
+        <div className="flex flex-col bg-base mb-[1px]" style={{ borderRight: 'none', borderBottom: 'none' }}>
+          <div className="flex justify-between items-center p-4 border-b border-grid bg-base">
+            <h2 className="text-sm font-mono text-secondary uppercase flex items-center gap-2">NEW_ENTRY_FORM</h2>
           </div>
           
-          <div className="form-group">
-            <label className="form-label">Location Data</label>
-            <div style={{ display: 'flex' }}>
+          <div className="mb-6">
+            <label className="block font-mono text-xs text-secondary mb-2 uppercase">Location Data</label>
+            <div className="flex">
               <input 
                 type="text" 
-                className="form-input" 
+                className="flex-1 bg-transparent border border-grid p-4 text-primary font-mono outline-none focus:border-volt transition-snap" 
                 readOnly 
                 value={isLoadingLocation ? 'DETECTING...' : location.address} 
               />
-              <button className="btn" onClick={detectLocation} disabled={isLoadingLocation}>
+              <button className="bg-transparent border border-l-0 border-grid px-6 py-4 text-primary font-mono uppercase font-bold cursor-pointer transition-snap hover:bg-volt hover:text-inverse" onClick={detectLocation} disabled={isLoadingLocation}>
                 {isLoadingLocation ? 'WAIT' : 'SYNC'}
               </button>
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Log Details</label>
+          <div className="mb-6">
+            <label className="block font-mono text-xs text-secondary mb-2 uppercase">Log Details</label>
             <textarea
-              className="form-textarea"
+              className="w-full bg-base border border-grid p-4 text-primary font-mono outline-none focus:border-volt transition-snap min-h-[120px] resize-y"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="ENTER INCIDENT DETAILS..."
@@ -124,49 +122,49 @@ const Reports = () => {
             />
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Threat Level</label>
+          <div className="mb-6">
+            <label className="block font-mono text-xs text-secondary mb-2 uppercase">Threat Level</label>
             <select
-              className="form-select"
+              className="w-full bg-transparent border border-grid p-4 text-primary font-mono outline-none focus:border-volt transition-snap"
               value={severity}
               onChange={(e) => setSeverity(e.target.value)}
             >
-              <option value="Minor">MINOR / CLASS-1</option>
-              <option value="Moderate">MODERATE / CLASS-2</option>
-              <option value="Severe">SEVERE / CLASS-3</option>
+              <option value="Minor" className="bg-base text-primary">MINOR / CLASS-1</option>
+              <option value="Moderate" className="bg-base text-primary">MODERATE / CLASS-2</option>
+              <option value="Severe" className="bg-base text-primary">SEVERE / CLASS-3</option>
             </select>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Visual Evidence (OPTIONAL)</label>
+          <div className="mb-6">
+            <label className="block font-mono text-xs text-secondary mb-2 uppercase">Visual Evidence (OPTIONAL)</label>
             <input
               type="file"
               accept="image/*"
               onChange={handleImageUpload}
-              className="form-input"
+              className="w-full bg-base border border-grid p-4 text-primary font-mono outline-none focus:border-volt transition-snap"
             />
             {image && (
               <img src={image} alt="Preview" style={{ marginTop: '1rem', width: '100%', maxWidth: '300px', border: '1px solid var(--grid-border)' }} />
             )}
           </div>
 
-          <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleSubmit}>
+          <button className="inline-flex items-center justify-center px-6 py-3 font-mono uppercase font-bold cursor-pointer transition-snap bg-volt text-inverse border border-volt hover:bg-volt-dim hover:text-volt" style={{ width: '100%' }} onClick={handleSubmit}>
             SUBMIT_DATA
           </button>
         </div>
       )}
 
       {currentView === 'view' && (
-        <div className="content-grid">
+        <div className="grid grid-cols-1 gap-[1px] bg-grid">
           {reports.length === 0 ? (
-            <div className="card" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '4rem 1rem' }}>
+            <div className="flex flex-col bg-base mb-[1px]" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '4rem 1rem' }}>
               <p style={{ fontFamily: 'JetBrains Mono', color: 'var(--text-secondary)' }}>NO_DATA_FOUND</p>
             </div>
           ) : (
             reports.map(report => (
-              <div key={report.id} className="card">
-                <div className="card-header" style={{ justifyContent: 'space-between' }}>
-                  <h2 className="card-title" style={{ 
+              <div key={report.id} className="flex flex-col bg-base mb-[1px]">
+                <div className="flex justify-between items-center p-4 border-b border-grid bg-base" style={{ justifyContent: 'space-between' }}>
+                  <h2 className="text-sm font-mono text-secondary uppercase flex items-center gap-2" style={{ 
                     color: report.severity === 'Severe' ? 'var(--status-danger)' : 
                            report.severity === 'Moderate' ? 'var(--status-warning)' : 'var(--status-success)' 
                   }}>

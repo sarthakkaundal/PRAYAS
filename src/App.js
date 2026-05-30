@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import './App.css';
+
 import Reports from './pages/Reports';
 import Map from './pages/Map';
 import Help from './pages/Help';
@@ -36,72 +36,72 @@ const Header = ({ setCurrentPage, currentPage, theme, toggleTheme }) => {
 	}, []);
 
 	return (
-		<div className="header">
-			<div className="header-left">
-				<h1>PRAYAS</h1>
-				<p>{currentTime}</p>
+		<div className="flex justify-between items-stretch border-b border-grid bg-surface sticky top-0 z-[100]">
+			<div className="p-6 border-r border-grid flex-1">
+				<h1 className="text-4xl font-bold uppercase tracking-wider mb-2">PRAYAS</h1>
+				<p className="font-mono text-sm text-secondary">{currentTime}</p>
 			</div>
-			<div className="header-icons">
+			<div className="flex">
 				<div
-					className={`icon-card ${currentPage === 'report' ? 'active' : ''}`}
+					className={`flex flex-col items-center justify-center w-24 cursor-pointer border-l border-grid transition-snap group ${currentPage === 'report' ? 'bg-volt text-inverse' : 'bg-surface hover:bg-volt hover:text-inverse'}`}
 					onClick={() => setCurrentPage('report')}
 				>
-					<svg xmlns="http://www.w3.org/2000/svg" className="icon-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-secondary group-hover:text-inverse transition-snap" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 					</svg>
-					<span>Reports</span>
+					<span className="font-mono text-xs mt-2 uppercase font-bold">Reports</span>
 				</div>
 
 				<div
-					className={`icon-card ${currentPage === 'funds' ? 'active' : ''}`}
+					className={`flex flex-col items-center justify-center w-24 cursor-pointer border-l border-grid transition-snap group ${currentPage === 'funds' ? 'bg-volt text-inverse' : 'bg-surface hover:bg-volt hover:text-inverse'}`}
 					onClick={() => setCurrentPage('funds')}
 				>
-					<svg xmlns="http://www.w3.org/2000/svg" className="icon-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-secondary group-hover:text-inverse transition-snap" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 					</svg>
-					<span>Funds</span>
+					<span className="font-mono text-xs mt-2 uppercase font-bold">Funds</span>
 				</div>
 
 				<div
-					className={`icon-card ${currentPage === 'map' ? 'active' : ''}`}
+					className={`flex flex-col items-center justify-center w-24 cursor-pointer border-l border-grid transition-snap group ${currentPage === 'map' ? 'bg-volt text-inverse' : 'bg-surface hover:bg-volt hover:text-inverse'}`}
 					onClick={() => setCurrentPage('map')}
 				>
-					<svg xmlns="http://www.w3.org/2000/svg" className="icon-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-secondary group-hover:text-inverse transition-snap" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zM12 11a2 2 0 100-4 2 2 0 000 4z" />
 					</svg>
-					<span>Map</span>
+					<span className="font-mono text-xs mt-2 uppercase font-bold">Map</span>
 				</div>
 
 				<div
-					className={`icon-card ${currentPage === 'help' ? 'active' : ''}`}
+					className={`flex flex-col items-center justify-center w-24 cursor-pointer border-l border-grid transition-snap group ${currentPage === 'help' ? 'bg-volt text-inverse' : 'bg-surface hover:bg-volt hover:text-inverse'}`}
 					onClick={() => setCurrentPage('help')}
 				>
-					<svg xmlns="http://www.w3.org/2000/svg" className="icon-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-secondary group-hover:text-inverse transition-snap" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.5 4.5a1 1 0 01-.217 1.013l-2.1 2.1a11.042 11.042 0 005.516 5.516l2.1-2.1a1 1 0 011.013-.217l4.5 1.5a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.163 21 3 14.837 3 7V5z" />
 					</svg>
-					<span>Contact</span>
+					<span className="font-mono text-xs mt-2 uppercase font-bold">Contact</span>
 				</div>
 
 				{currentPage !== 'dashboard' && (
 					<div
-						className="icon-card"
+						className="flex flex-col items-center justify-center w-24 cursor-pointer border-l border-grid bg-surface hover:bg-volt hover:text-inverse transition-snap group"
 						onClick={() => setCurrentPage('dashboard')}
 					>
-						<svg xmlns="http://www.w3.org/2000/svg" className="icon-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-secondary group-hover:text-inverse transition-snap" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 							<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
 						</svg>
-						<span>Dashboard</span>
+						<span className="font-mono text-xs mt-2 uppercase font-bold">Dashboard</span>
 					</div>
 				)}
 				
 				<div
-					className="icon-card"
+					className="flex flex-col items-center justify-center w-24 cursor-pointer border-l border-grid bg-surface hover:bg-volt hover:text-inverse transition-snap group"
 					onClick={toggleTheme}
 				>
-					<svg xmlns="http://www.w3.org/2000/svg" className="icon-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-secondary group-hover:text-inverse transition-snap" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d={theme === 'light' ? "M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" : "M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"} />
 					</svg>
-					<span>{theme === 'light' ? 'NIGHT' : 'DAY'}</span>
+					<span className="font-mono text-xs mt-2 uppercase font-bold">{theme === 'light' ? 'NIGHT' : 'DAY'}</span>
 				</div>
 			</div>
 		</div>
@@ -217,19 +217,20 @@ const WeatherCard = () => {
 	};
 
 	return (
-		<div className="card">
-			<div className="card-header">
-				<h2 className="card-title">
-					<svg className="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+		<div className="flex flex-col bg-base mb-[1px]">
+			<div className="flex justify-between items-center p-4 border-b border-grid bg-base">
+				<h2 className="text-sm font-mono text-secondary uppercase flex items-center gap-2">
+					<svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.002 4.002 0 003 15z"></path>
 					</svg>
 					Weather Data
 				</h2>
 			</div>
 
-			<div className="search-box" style={{ position: 'relative' }}>
+			<div className="relative flex border-b border-grid" style={{ position: 'relative' }}>
 				<input
 					type="text"
+					className="flex-1 bg-transparent border-none p-4 font-mono text-primary outline-none"
 					value={cityInput}
 					onChange={handleInputChange}
 					onKeyDown={handleKeyDown}
@@ -237,7 +238,10 @@ const WeatherCard = () => {
 					onFocus={() => { if (cityInput.length > 0) setShowSuggestions(true); }}
 					placeholder="INPUT CITY_NAME"
 				/>
-				<button onClick={handleSearch}>Scan</button>
+				<button 
+					className="bg-transparent border-l border-grid p-4 font-mono uppercase font-bold text-primary hover:bg-volt hover:text-inverse transition-snap cursor-pointer"
+					onClick={handleSearch}
+				>Scan</button>
 
 				{showSuggestions && suggestions.length > 0 && (
 					<div style={{
@@ -282,26 +286,26 @@ const WeatherCard = () => {
 				</div>
 			)}
 
-			<div className="weather-info">
+			<div className="flex flex-col gap-6">
 				<div style={{ fontFamily: 'JetBrains Mono', color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem', textAlign: 'center' }}>
 					LOC: {weather.city}
 				</div>
-				<div className="temperature">
-					<div className="temperature-value">{weather.temperature}</div>
-					<div className="weather-condition">{weather.condition}</div>
+				<div className="text-center">
+					<div className="text-6xl font-bold leading-none">{weather.temperature}</div>
+					<div className="font-mono text-volt mt-2 uppercase tracking-widest">{weather.condition}</div>
 				</div>
-				<div className="weather-details">
-					<div className="weather-item">
-						<span>Humidity</span>
-						<span>{weather.humidity}</span>
+				<div className="flex flex-col gap-[1px] bg-grid mt-6">
+					<div className="bg-base p-4 flex justify-between items-center">
+						<span className="font-mono text-xs text-secondary uppercase tracking-widest">Humidity</span>
+						<span className="font-mono font-bold text-sm">{weather.humidity}</span>
 					</div>
-					<div className="weather-item">
-						<span>Rainfall</span>
-						<span>{weather.rainfall}</span>
+					<div className="bg-base p-4 flex justify-between items-center">
+						<span className="font-mono text-xs text-secondary uppercase tracking-widest">Rainfall</span>
+						<span className="font-mono font-bold text-sm">{weather.rainfall}</span>
 					</div>
-					<div className="weather-item">
-						<span>Wind</span>
-						<span>{weather.wind}</span>
+					<div className="bg-base p-4 flex justify-between items-center">
+						<span className="font-mono text-xs text-secondary uppercase tracking-widest">Wind</span>
+						<span className="font-mono font-bold text-sm">{weather.wind}</span>
 					</div>
 				</div>
 			</div>
@@ -325,24 +329,24 @@ const RiskIndicator = () => {
 	const strokeDashoffset = circumference - (floodRisk / 100) * circumference;
 
 	return (
-		<div className="card">
-            <div className="card-header">
-                <h2 className="card-title">
-                    <svg className="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+		<div className="flex flex-col bg-base mb-[1px]">
+            <div className="flex justify-between items-center p-4 border-b border-grid bg-base">
+                <h2 className="text-sm font-mono text-secondary uppercase flex items-center gap-2">
+                    <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
                     </svg>
                     Threat Assessment
                 </h2>
             </div>
-			<div className="risk-indicator">
-				<div className="circular-progress">
+			<div className="flex flex-col items-center justify-center p-12 border-b border-grid bg-base gap-10">
+				<div className="relative w-32 h-32 flex-shrink-0">
 					<svg viewBox="0 0 100 100">
-						<circle className="progress-bg" cx="50" cy="50" r="42"></circle>
+						<circle className="stroke-grid stroke-[2px] fill-transparent" cx="50" cy="50" r="46"></circle>
 						<circle
-							className="progress-bar"
+							className="stroke-[2px] fill-transparent transition-all duration-1000 ease-out"
 							cx="50"
 							cy="50"
-							r="42"
+							r="46"
 							style={{
 								stroke: riskInfo.color,
 								strokeDasharray: circumference,
@@ -350,16 +354,16 @@ const RiskIndicator = () => {
 							}}
 						></circle>
 					</svg>
-					<div className="progress-text">
-						<div className="progress-percentage" style={{ color: riskInfo.color }}>
+					<div className="absolute inset-0 flex flex-col items-center justify-center">
+						<div className="text-3xl font-bold leading-none" style={{ color: riskInfo.color }}>
 							{floodRisk}%
 						</div>
-						<div className="progress-label">PROBABILITY</div>
+						<div className="font-mono text-[10px] text-secondary mt-1 uppercase tracking-widest">PROBABILITY</div>
 					</div>
 				</div>
-				<div className="risk-level" style={{ borderColor: riskInfo.color, color: riskInfo.color }}>
-					<div>{riskInfo.level} Risk Level</div>
-					<div className="risk-level-text">BASED ON LOCAL TELEMETRY</div>
+				<div className="w-full text-center font-bold uppercase border p-4" style={{ borderColor: riskInfo.color, color: riskInfo.color }}>
+					<div className="text-sm tracking-wider">{riskInfo.level} Risk Level</div>
+					<div className="font-mono text-[10px] text-secondary mt-2 tracking-widest">BASED ON LOCAL TELEMETRY</div>
 				</div>
 			</div>
 		</div>
@@ -373,29 +377,29 @@ const SheltersList = () => {
 	].sort((a, b) => a.distance - b.distance);
 
 	return (
-		<div className="card" style={{ gridColumn: '1 / -1' }}>
-            <div className="card-header">
-                <h2 className="card-title">
-                    <svg className="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+		<div className="flex flex-col bg-base mb-[1px]" style={{ gridColumn: '1 / -1' }}>
+            <div className="flex justify-between items-center p-4 border-b border-grid bg-base">
+                <h2 className="text-sm font-mono text-secondary uppercase flex items-center gap-2">
+                    <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
                         <path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
                     </svg>
                     Safe Zones (Nearest)
                 </h2>
             </div>
-			<div className="shelters-list">
+			<div className="flex flex-col gap-0">
 				{shelters.map((shelter) => (
-					<div key={shelter.id} className="shelter-item">
-						<div className="shelter-info">
-							<div className="shelter-icon">{shelter.icon}</div>
+					<div key={shelter.id} className="flex justify-between p-4 border-b border-grid bg-base transition-snap hover:bg-volt-dim hover:shadow-[inset_4px_0_0_0_var(--accent-volt)] hover:z-10 relative">
+						<div className="flex items-center gap-4">
+							<div className="text-2xl">{shelter.icon}</div>
 							<div>
-								<div className="shelter-name">{shelter.name}</div>
-								<div className="shelter-type">Class: {shelter.type}</div>
+								<div className="font-mono font-bold">{shelter.name}</div>
+								<div className="font-mono text-xs text-secondary">Class: {shelter.type}</div>
 							</div>
 						</div>
-						<div className="shelter-distance">
-							<div className="distance-value">{shelter.distance} KM</div>
-							<div className="distance-label">RANGE</div>
+						<div className="text-right">
+							<div className="font-bold text-lg">{shelter.distance} KM</div>
+							<div className="font-mono text-xs text-secondary">RANGE</div>
 						</div>
 					</div>
 				))}
@@ -411,22 +415,22 @@ const AlertsList = () => {
 	];
 
 	return (
-		<div className="card">
-            <div className="card-header">
-                <h2 className="card-title">
-                    <svg className="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+		<div className="flex flex-col bg-base mb-[1px]">
+            <div className="flex justify-between items-center p-4 border-b border-grid bg-base">
+                <h2 className="text-sm font-mono text-secondary uppercase flex items-center gap-2">
+                    <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M15 17h5l-5 5v-5zM11 17H6l5 5v-5zM8 12V7a4 4 0 118 0v5H8z"></path>
                     </svg>
                     System Alerts
                 </h2>
             </div>
-			<div className="alerts-list">
+			<div className="flex flex-col gap-0">
 				{recentAlerts.map((alert) => (
-					<div key={alert.id} className="alert-item">
-						<div className={`alert-indicator ${alert.isNew ? 'alert-new' : 'alert-old'}`}></div>
-						<div className="alert-content">
-							<div className="alert-message">{alert.message}</div>
-							<div className="alert-time">{alert.time}</div>
+					<div key={alert.id} className="flex items-start p-6 border-b border-grid bg-base transition-snap hover:bg-volt-dim hover:shadow-[inset_4px_0_0_0_var(--accent-volt)] hover:z-10 relative">
+						<div className={`w-2 h-2 mt-1.5 mr-4 shrink-0 bg-grid ${alert.isNew ? 'bg-volt shadow-[0_0_8px_var(--accent-volt)]' : 'bg-grid'}`}></div>
+						<div className="flex flex-col gap-2">
+							<div className="font-bold text-sm">{alert.message}</div>
+							<div className="font-mono text-[10px] text-secondary uppercase tracking-widest">{alert.time}</div>
 						</div>
 					</div>
 				))}
@@ -470,20 +474,20 @@ const NewsList = () => {
 	}, []);
 
 	return (
-		<div className="card">
-            <div className="card-header">
-                <h2 className="card-title">Intel Feed</h2>
+		<div className="flex flex-col bg-base mb-[1px]">
+            <div className="flex justify-between items-center p-4 border-b border-grid bg-base">
+                <h2 className="text-sm font-mono text-secondary uppercase flex items-center gap-2">Intel Feed</h2>
             </div>
-			<div className="news-list">
+			<div className="flex flex-col gap-0">
 				{news.map((item) => (
-					<div key={item.id} className="news-item">
-						<div className="news-header">
-							<h3 className="news-title">{item.title}</h3>
-							<a className="news-link" href={item.url} target="_blank" rel="noopener noreferrer">
-								[VIEW]
-							</a>
+					<div key={item.id} className="flex justify-between items-start p-6 border-b border-grid bg-base transition-snap hover:bg-volt-dim hover:shadow-[inset_4px_0_0_0_var(--accent-volt)] hover:z-10 relative">
+						<div className="flex flex-col gap-2 pr-4">
+							<h3 className="font-bold text-sm leading-snug">{item.title}</h3>
+							<div className="font-mono text-[10px] text-secondary uppercase tracking-widest">{item.time}</div>
 						</div>
-						<div className="news-time">{item.time}</div>
+						<a className="font-mono text-[10px] text-primary border border-grid px-2 py-1 hover:bg-grid hover:text-inverse transition-snap mt-1 shrink-0" href={item.url} target="_blank" rel="noopener noreferrer">
+							[VIEW]
+						</a>
 					</div>
 				))}
 			</div>
@@ -508,14 +512,14 @@ const App = () => {
 	// Render dashboard content
 	const renderDashboard = () => (
 		<>
-			<div className="dashboard-grid cols-2">
+			<div className="grid grid-cols-1 lg:grid-cols-2 gap-[1px] bg-grid">
 				<WeatherCard />
 				<RiskIndicator />
 			</div>
-			<div className="dashboard-grid cols-1">
+			<div className="grid grid-cols-1 gap-[1px] bg-grid">
 			    <SheltersList />
             </div>
-			<div className="dashboard-grid cols-2">
+			<div className="grid grid-cols-1 lg:grid-cols-2 gap-[1px] bg-grid">
 				<AlertsList />
 				<NewsList />
 			</div>

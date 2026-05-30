@@ -17,21 +17,23 @@ const sampleData = {
 };
 
 const LoginPage = ({ onLogin }) => (
-  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
-    <div className="card" style={{ maxWidth: '400px', width: '100%', textAlign: 'center' }}>
-      <div className="card-header" style={{ justifyContent: 'center' }}>
-        <h2 className="card-title">ACCESS_CONTROL</h2>
+  <div className="flex justify-center items-center min-h-[80vh]">
+    <div className="flex flex-col bg-base border border-grid w-full max-w-[500px]">
+      <div className="flex justify-center items-center p-6 border-b border-grid bg-base">
+        <h2 className="text-sm font-mono text-secondary uppercase tracking-widest">ACCESS_CONTROL</h2>
       </div>
-      <p style={{ fontFamily: 'JetBrains Mono', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '2rem' }}>
-        AWAITING CLEARANCE LEVEL
-      </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <button className="btn btn-primary" onClick={() => onLogin('public')}>
-          AUTH_LEVEL: PUBLIC
-        </button>
-        <button className="btn" style={{ borderColor: 'var(--accent-volt)', color: 'var(--accent-volt)' }} onClick={() => onLogin('admin')}>
-          AUTH_LEVEL: ADMIN
-        </button>
+      <div className="p-8 flex flex-col gap-6">
+        <p className="font-mono text-sm text-secondary text-center uppercase tracking-widest mb-2">
+          AWAITING CLEARANCE LEVEL
+        </p>
+        <div className="flex flex-col gap-4">
+          <button className="bg-transparent border border-grid px-6 py-4 text-primary font-mono uppercase font-bold cursor-pointer transition-snap hover:bg-surface" onClick={() => onLogin('public')}>
+            AUTH_LEVEL: PUBLIC
+          </button>
+          <button className="bg-transparent border border-volt px-6 py-4 text-volt font-mono uppercase font-bold cursor-pointer transition-snap hover:bg-volt-dim" onClick={() => onLogin('admin')}>
+            AUTH_LEVEL: ADMIN
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -50,40 +52,40 @@ const PublicDashboard = ({ onLogout }) => {
 
   return (
     <div style={{ width: '100%' }}>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="p-8 border-b border-grid bg-base flex justify-between items-center">
         <div>
-          <h1 className="page-title">Relief Funds</h1>
-          <p className="page-subtitle">PUBLIC_DASHBOARD_ACTIVE</p>
+          <h1 className="text-2xl font-bold uppercase tracking-wider mb-2">Relief Funds</h1>
+          <p className="font-mono text-sm text-secondary uppercase tracking-widest">PUBLIC_DASHBOARD_ACTIVE</p>
         </div>
-        <button className="btn btn-danger" onClick={onLogout}>TERMINATE_SESSION</button>
+        <button className="bg-transparent border border-red-500/50 text-red-500 px-6 py-3 font-mono text-sm uppercase font-bold hover:bg-red-500/10 transition-snap" onClick={onLogout}>TERMINATE_SESSION</button>
       </div>
 
-      <div className="content-grid">
-        <div className="card" style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: '1rem' }}>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-[1px] bg-grid mb-[1px]">
           {[
             { label: 'TOTAL_INFLOW', value: totalFunds },
             { label: 'TOTAL_OUTFLOW', value: totalAllocated },
             { label: 'NET_RESERVE', value: totalFunds - totalAllocated }
           ].map(stat => (
-            <div key={stat.label} style={{ textAlign: 'center', padding: '1rem' }}>
-              <div style={{ fontFamily: 'JetBrains Mono', color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+            <div key={stat.label} className="bg-base p-8 text-center flex flex-col justify-center">
+              <div className="font-mono text-xs text-secondary uppercase tracking-widest mb-4">
                 {stat.label}
               </div>
-              <div style={{ fontSize: '2.5rem', fontWeight: '700', color: stat.label === 'NET_RESERVE' ? 'var(--accent-volt)' : 'var(--text-primary)' }}>
+              <div className={`text-4xl font-bold ${stat.label === 'NET_RESERVE' ? 'text-volt' : 'text-primary'}`}>
                 ₹{stat.value.toLocaleString()}
               </div>
             </div>
           ))}
-        </div>
+      </div>
 
-        <div className="card" style={{ gridColumn: '1 / -1' }}>
-          <div className="card-header">
-            <h2 className="card-title">ALLOCATION_MATRIX</h2>
+      <div className="grid grid-cols-1 gap-[1px] bg-grid">
+        <div className="flex flex-col bg-base mb-[1px]">
+          <div className="flex items-center p-4 border-b border-grid bg-base">
+            <h2 className="text-[10px] font-mono text-secondary uppercase tracking-widest">ALLOCATION_MATRIX</h2>
           </div>
-          <div style={{ height: '300px' }}>
+          <div className="h-[400px] py-8">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" outerRadius={100} innerRadius={60} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} stroke="none">
+                <Pie data={pieData} cx="50%" cy="50%" outerRadius={120} innerRadius={80} dataKey="value" stroke="none">
                   {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                 </Pie>
                 <Tooltip 
@@ -95,19 +97,20 @@ const PublicDashboard = ({ onLogout }) => {
             </ResponsiveContainer>
           </div>
         </div>
-
-        <div className="card" style={{ overflowX: 'auto' }}>
-          <div className="card-header">
-            <h2 className="card-title">RECENT_INFLOWS</h2>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[1px] bg-grid mt-[1px]">
+        <div className="flex flex-col bg-base" style={{ overflowX: 'auto' }}>
+          <div className="flex justify-between items-center p-4 border-b border-grid bg-base">
+            <h2 className="text-sm font-mono text-secondary uppercase flex items-center gap-2">RECENT_INFLOWS</h2>
           </div>
           <table className="data-table">
             <thead>
-              <tr>
+            <tr>
                 <th>SOURCE</th>
                 <th>CLASS</th>
                 <th>AMOUNT</th>
                 <th>DATE</th>
-              </tr>
+            </tr>
             </thead>
             <tbody>
               {sampleData.donations.map((d) => (
@@ -122,18 +125,18 @@ const PublicDashboard = ({ onLogout }) => {
           </table>
         </div>
 
-        <div className="card" style={{ overflowX: 'auto' }}>
-          <div className="card-header">
-            <h2 className="card-title">RECENT_OUTFLOWS</h2>
+        <div className="flex flex-col bg-base" style={{ overflowX: 'auto' }}>
+          <div className="flex justify-between items-center p-4 border-b border-grid bg-base">
+            <h2 className="text-sm font-mono text-secondary uppercase flex items-center gap-2">RECENT_OUTFLOWS</h2>
           </div>
           <table className="data-table">
             <thead>
-              <tr>
+            <tr>
                 <th>DESTINATION</th>
                 <th>PURPOSE</th>
                 <th>AMOUNT</th>
                 <th>DATE</th>
-              </tr>
+            </tr>
             </thead>
             <tbody>
               {sampleData.allocations.map((a) => (
@@ -152,46 +155,45 @@ const PublicDashboard = ({ onLogout }) => {
   );
 };
 
-// Extremely stripped down Admin version for aesthetics
 const AdminDashboard = ({ onLogout }) => (
   <div style={{ width: '100%' }}>
-    <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="p-8 border-b border-grid bg-base flex justify-between items-center">
       <div>
-        <h1 className="page-title">Relief Funds</h1>
-        <p className="page-subtitle" style={{ color: 'var(--accent-volt)' }}>ADMIN_OVERRIDE_ACTIVE</p>
+        <h1 className="text-2xl font-bold uppercase tracking-wider mb-2">Relief Funds</h1>
+        <p className="font-mono text-sm uppercase tracking-widest text-volt">ADMIN_OVERRIDE_ACTIVE</p>
       </div>
-      <button className="btn btn-danger" onClick={onLogout}>TERMINATE_SESSION</button>
+      <button className="bg-transparent border border-red-500 text-red-500 px-6 py-3 font-mono text-sm uppercase font-bold hover:bg-red-500 hover:text-white transition-snap" onClick={onLogout}>TERMINATE_SESSION</button>
     </div>
     
-    <div className="content-grid">
-      <div className="card">
-        <div className="card-header">
-          <h2 className="card-title">REGISTER_INFLOW</h2>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-[1px] bg-grid mt-[1px]">
+      <div className="flex flex-col bg-base p-8">
+        <div className="flex items-center mb-8">
+          <h2 className="text-[10px] font-mono text-secondary uppercase tracking-widest">REGISTER_INFLOW</h2>
         </div>
-        <div className="form-group">
-          <label className="form-label">SOURCE_ID</label>
-          <input type="text" className="form-input" placeholder="ENTER DONOR" />
+        <div className="mb-6">
+          <label className="block font-mono text-[10px] text-secondary mb-2 uppercase tracking-widest">SOURCE_ID</label>
+          <input type="text" className="w-full bg-transparent border border-grid p-4 text-primary font-mono outline-none focus:border-volt transition-snap" placeholder="ENTER DONOR" />
         </div>
-        <div className="form-group">
-          <label className="form-label">QUANTITY (INR)</label>
-          <input type="number" className="form-input" placeholder="0" />
+        <div className="mb-8">
+          <label className="block font-mono text-[10px] text-secondary mb-2 uppercase tracking-widest">QUANTITY (INR)</label>
+          <input type="number" className="w-full bg-transparent border border-grid p-4 text-primary font-mono outline-none focus:border-volt transition-snap" placeholder="0" />
         </div>
-        <button className="btn btn-primary" style={{ width: '100%' }}>EXECUTE_TRANSFER</button>
+        <button className="w-full bg-transparent border border-primary px-6 py-4 text-primary font-mono uppercase font-bold hover:bg-primary hover:text-base transition-snap">EXECUTE_TRANSFER</button>
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <h2 className="card-title">REGISTER_OUTFLOW</h2>
+      <div className="flex flex-col bg-base p-8">
+        <div className="flex items-center mb-8">
+          <h2 className="text-[10px] font-mono text-secondary uppercase tracking-widest">REGISTER_OUTFLOW</h2>
         </div>
-        <div className="form-group">
-          <label className="form-label">DESTINATION_ID</label>
-          <input type="text" className="form-input" placeholder="ENTER REGION" />
+        <div className="mb-6">
+          <label className="block font-mono text-[10px] text-secondary mb-2 uppercase tracking-widest">DESTINATION_ID</label>
+          <input type="text" className="w-full bg-transparent border border-grid p-4 text-primary font-mono outline-none focus:border-red-500 transition-snap" placeholder="ENTER REGION" />
         </div>
-        <div className="form-group">
-          <label className="form-label">QUANTITY (INR)</label>
-          <input type="number" className="form-input" placeholder="0" />
+        <div className="mb-8">
+          <label className="block font-mono text-[10px] text-secondary mb-2 uppercase tracking-widest">QUANTITY (INR)</label>
+          <input type="number" className="w-full bg-transparent border border-grid p-4 text-primary font-mono outline-none focus:border-red-500 transition-snap" placeholder="0" />
         </div>
-        <button className="btn btn-danger" style={{ width: '100%' }}>EXECUTE_TRANSFER</button>
+        <button className="w-full bg-transparent border border-red-500 text-red-500 px-6 py-4 font-mono uppercase font-bold hover:bg-red-500 hover:text-white transition-snap">EXECUTE_TRANSFER</button>
       </div>
     </div>
   </div>
@@ -204,8 +206,8 @@ const Fund = () => {
     <div style={{ width: '100%' }}>
       <style>{`
         .data-table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
-        .data-table th, .data-table td { padding: 1rem; border: 1px solid var(--grid-border); text-align: left; }
-        .data-table th { background: var(--bg-surface); color: var(--text-secondary); }
+        .data-table th, .data-table td { padding: 1rem; border-bottom: 1px solid var(--grid-border); text-align: left; }
+        .data-table th { background: var(--bg-surface); color: var(--text-secondary); font-size: 0.75rem; }
         .data-table tr { transition: var(--transition-snap); }
         .data-table tr:hover { background: var(--accent-volt); color: var(--text-inverse); }
         .data-table tr:hover td { color: var(--text-inverse) !important; }
