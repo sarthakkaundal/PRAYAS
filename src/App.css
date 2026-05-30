@@ -75,6 +75,9 @@ body {
     align-items: stretch;
     border-bottom: 1px solid var(--grid-border);
     background: var(--bg-surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
 }
 
 .container.full-width .header {
