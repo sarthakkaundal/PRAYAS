@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Register New Shelter - AuraSafe</title>
+
+		<!-- Tailwind CSS for styling -->
+		<script src="https://cdn.tailwindcss.com"></script>
+
+		<!-- Font Awesome for Icons -->
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+		/>
+
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+			rel="stylesheet"
+		/>
+
+		<style>
+			body {
+				font-family: 'Inter', sans-serif;
+				background-color: #e5e7eb; /* Light gray background */
+			}
+			.form-container {
+				background: rgba(255, 255, 255, 0.9);
+				backdrop-filter: blur(10px);
+				border: 1px solid rgba(0, 0, 0, 0.05);
+			}
+		</style>
+	</head>
+	<body class="flex items-center justify-center min-h-screen">
+		<div class="form-container p-8 rounded-2xl shadow-lg max-w-lg w-full">
+			<h1
+				class="text-3xl font-bold text-gray-800 text-center mb-6 flex items-center justify-center"
+			>
+				<i class="fas fa-house-chimney-medical text-green-500 mr-3"></i>
+				Register a Safe Shelter
+			</h1>
+
+			<form id="add-shelter-form" class="space-y-6">
+				<div>
+					<label
+						for="shelter-name"
+						class="block text-sm font-medium text-gray-700"
+						>Shelter Name</label
+					>
+					<input
+						type="text"
+						id="shelter-name"
+						required
+						class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+						placeholder="e.g., Community Hall, Sector 12"
+					/>
+				</div>
+				<div>
+					<label
+						for="latitude"
+						class="block text-sm font-medium text-gray-700"
+						>Latitude</label
+					>
+					<input
+						type="number"
+						step="any"
+						id="latitude"
+						required
+						class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+						placeholder="e.g., 31.6340"
+					/>
+				</div>
+				<div>
+					<label
+						for="longitude"
+						class="block text-sm font-medium text-gray-700"
+						>Longitude</label
+					>
+					<input
+						type="number"
+						step="any"
+						id="longitude"
+						required
+						class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+						placeholder="e.g., 74.8723"
+					/>
+				</div>
+
+				<button
+					type="submit"
+					class="w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-xl hover:bg-blue-600 transition-colors flex items-center justify-center text-lg"
+				>
+					<i class="fas fa-plus-circle mr-2"></i> Add Shelter
+				</button>
+			</form>
+
+			<div id="status-message" class="mt-6 text-center text-sm"></div>
+		</div>
+
+		<!-- Firebase -->
+		<script type="module">
+			import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+			import {
+				getDatabase,
+				ref,
+				push,
+			} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+
+			const firebaseConfig = {
+				apiKey: '',
+				authDomain: '',
+				databaseURL: '',
+				projectId: '',
+				storageBucket: '',
+				messagingSenderId: '',
+				appId: '',
+			};
+			const app = initializeApp(firebaseConfig);
+			const db = getDatabase(app);
+
+			document
+				.getElementById('add-shelter-form')
+				.addEventListener('submit', function (event) {
+					event.preventDefault();
+
+					const name = document.getElementById('shelter-name').value;
+					const lat = parseFloat(
+						document.getElementById('latitude').value
+					);
+					const lng = parseFloat(
+						document.getElementById('longitude').value
+					);
+					const statusMessage =
+						document.getElementById('status-message');
+
+					if (!name || isNaN(lat) || isNaN(lng)) {
+						statusMessage.textContent =
+							'Please fill in all fields correctly.';
+						statusMessage.className =
+							'mt-6 text-center text-red-600 font-semibold';
+						return;
+					}
+
+					const newShelter = { name, lat, lng };
+
+					push(ref(db, 'shelters'), newShelter)
+						.then(() => {
+							statusMessage.textContent =
+								'Shelter successfully registered!';
+							statusMessage.className =
+								'mt-6 text-center text-green-600 font-semibold';
+							document.getElementById('add-shelter-form').reset();
+						})
+						.catch((error) => {
+							console.error('Error adding document: ', error);
+							statusMessage.textContent = `Error: ${error.message}`;
+							statusMessage.className =
+								'mt-6 text-center text-red-600 font-semibold';
+						});
+				});
+		</script>
+	</body>
+</html>
