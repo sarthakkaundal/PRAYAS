@@ -108,17 +108,26 @@ const WeatherCard = () => {
 		wind: '--',
 	});
 	const [cityInput, setCityInput] = useState('');
+	const [errorMsg, setErrorMsg] = useState('');
 
 	const getWeather = async (city = 'Delhi') => {
-		const apiKey = '';
+		const apiKey = process.env.REACT_APP_WEATHER_API_KEY || ''; 
+		setErrorMsg('');
+
+		if (!apiKey) {
+			setErrorMsg('SYS_ERR: DATA_COULD_NOT_BE_LOADED_PROPERLY');
+			return;
+		}
+
 		const url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=${apiKey}`;
 
 		try {
 			const response = await fetch(url);
 			const data = await response.json();
 
-			if (data.cod !== 200) {
-				alert('City not found!');
+			if (data.cod !== 200 && data.cod !== "200") {
+				console.error("OpenWeather API Error Data:", data);
+				setErrorMsg('SYS_ERR: DATA_COULD_NOT_BE_LOADED_PROPERLY');
 				return;
 			}
 
@@ -131,6 +140,7 @@ const WeatherCard = () => {
 			});
 		} catch (error) {
 			console.error('Error fetching weather data:', error);
+			setErrorMsg('SYS_ERR: DATA_COULD_NOT_BE_LOADED_PROPERLY');
 		}
 	};
 
@@ -162,6 +172,12 @@ const WeatherCard = () => {
 				/>
 				<button onClick={handleSearch}>Scan</button>
 			</div>
+
+			{errorMsg && (
+				<div style={{ fontFamily: 'JetBrains Mono', color: 'var(--status-danger)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+					{errorMsg}
+				</div>
+			)}
 
 			<div className="weather-info">
 				<div className="temperature">

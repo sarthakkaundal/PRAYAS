@@ -80,10 +80,10 @@ const Map = () => {
 
         <iframe
           title="Disaster Management Map"
-          src={`${process.env.PUBLIC_URL}/Map/map61.html`}
+          src={`${process.env.PUBLIC_URL}/MAP/map61.html`}
           width="100%"
           height="100%"
-          style={{ border: 0 }}
+          style={{ border: 0, display: 'block' }}
           allowFullScreen
         />
 
