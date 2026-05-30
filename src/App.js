@@ -82,17 +82,6 @@ const Header = ({ setCurrentPage, currentPage, theme, toggleTheme }) => {
 					<span>Contact</span>
 				</div>
 
-				<div
-					className="icon-card"
-					onClick={toggleTheme}
-					style={{ cursor: 'pointer', borderLeft: '1px solid var(--grid-border)' }}
-				>
-					<svg xmlns="http://www.w3.org/2000/svg" className="icon-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d={theme === 'light' ? "M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" : "M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"} />
-					</svg>
-					<span>{theme === 'light' ? 'NIGHT_MODE' : 'DAY_MODE'}</span>
-				</div>
-
 				{currentPage !== 'dashboard' && (
 					<div
 						className="icon-card"
@@ -104,6 +93,16 @@ const Header = ({ setCurrentPage, currentPage, theme, toggleTheme }) => {
 						<span>Dashboard</span>
 					</div>
 				)}
+				
+				<div
+					className="icon-card"
+					onClick={toggleTheme}
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" className="icon-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d={theme === 'light' ? "M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" : "M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"} />
+					</svg>
+					<span>{theme === 'light' ? 'NIGHT' : 'DAY'}</span>
+				</div>
 			</div>
 		</div>
 	);
@@ -112,6 +111,7 @@ const Header = ({ setCurrentPage, currentPage, theme, toggleTheme }) => {
 // Weather Card Component
 const WeatherCard = () => {
 	const [weather, setWeather] = useState({
+		city: '--',
 		temperature: '--',
 		condition: '--',
 		humidity: '--',
@@ -120,12 +120,26 @@ const WeatherCard = () => {
 	});
 	const [cityInput, setCityInput] = useState('');
 	const [errorMsg, setErrorMsg] = useState('');
+	const [showSuggestions, setShowSuggestions] = useState(false);
+	const [suggestions, setSuggestions] = useState([]);
 
 	const getWeather = async (city = 'Delhi') => {
 		const apiKey = process.env.REACT_APP_WEATHER_API_KEY || ''; 
 		setErrorMsg('');
 
+		const clearWeather = () => {
+			setWeather({
+				city: '--',
+				temperature: '--',
+				condition: '--',
+				humidity: '--',
+				rainfall: '--',
+				wind: '--',
+			});
+		};
+
 		if (!apiKey) {
+			clearWeather();
 			setErrorMsg('SYS_ERR: DATA_COULD_NOT_BE_LOADED_PROPERLY');
 			return;
 		}
@@ -138,19 +152,22 @@ const WeatherCard = () => {
 
 			if (data.cod !== 200 && data.cod !== "200") {
 				console.error("OpenWeather API Error Data:", data);
+				clearWeather();
 				setErrorMsg('SYS_ERR: DATA_COULD_NOT_BE_LOADED_PROPERLY');
 				return;
 			}
 
 			setWeather({
+				city: data.name.toUpperCase(),
 				temperature: `${Math.round(data.main.temp)}°`,
-				condition: data.weather[0].description,
+				condition: data.weather[0].description.toUpperCase(),
 				humidity: `${data.main.humidity}%`,
 				rainfall: data.rain ? `${data.rain['1h'] || data.rain['3h'] || 0}mm` : '0.0mm',
 				wind: `${data.wind.speed} km/h`,
 			});
 		} catch (error) {
 			console.error('Error fetching weather data:', error);
+			clearWeather();
 			setErrorMsg('SYS_ERR: DATA_COULD_NOT_BE_LOADED_PROPERLY');
 		}
 	};
@@ -159,8 +176,44 @@ const WeatherCard = () => {
 		getWeather();
 	}, []);
 
+	const handleInputChange = async (e) => {
+		const value = e.target.value;
+		setCityInput(value);
+		
+		if (value.length >= 2) {
+			const apiKey = process.env.REACT_APP_WEATHER_API_KEY || ''; 
+			if (!apiKey) return;
+			try {
+				const url = `https://api.openweathermap.org/geo/1.0/direct?q=${value}&limit=5&appid=${apiKey}`;
+				const res = await fetch(url);
+				const data = await res.json();
+				if (Array.isArray(data) && data.length > 0) {
+					const cityStrings = data.map(c => {
+						return c.state ? `${c.name}, ${c.state}, ${c.country}` : `${c.name}, ${c.country}`;
+					});
+					setSuggestions([...new Set(cityStrings)]);
+					setShowSuggestions(true);
+				} else {
+					setSuggestions([]);
+					setShowSuggestions(false);
+				}
+			} catch(err) {
+				console.error("Geocoding Error:", err);
+			}
+		} else {
+			setShowSuggestions(false);
+		}
+	};
+
 	const handleSearch = () => {
+		setShowSuggestions(false);
 		getWeather(cityInput || 'Delhi');
+	};
+
+	const handleKeyDown = (e) => {
+		if (e.key === 'Enter') {
+			handleSearch();
+		}
 	};
 
 	return (
@@ -174,14 +227,53 @@ const WeatherCard = () => {
 				</h2>
 			</div>
 
-			<div className="search-box">
+			<div className="search-box" style={{ position: 'relative' }}>
 				<input
 					type="text"
 					value={cityInput}
-					onChange={(e) => setCityInput(e.target.value)}
+					onChange={handleInputChange}
+					onKeyDown={handleKeyDown}
+					onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+					onFocus={() => { if (cityInput.length > 0) setShowSuggestions(true); }}
 					placeholder="INPUT CITY_NAME"
 				/>
 				<button onClick={handleSearch}>Scan</button>
+
+				{showSuggestions && suggestions.length > 0 && (
+					<div style={{
+						position: 'absolute',
+						top: '100%',
+						left: 0,
+						width: 'calc(100% - 80px)', // leave room for scan button
+						background: 'var(--bg-base)',
+						border: '1px solid var(--grid-border)',
+						borderTop: 'none',
+						zIndex: 10,
+						display: 'flex',
+						flexDirection: 'column',
+						boxShadow: '0 10px 20px rgba(0,0,0,0.5)'
+					}}>
+						{suggestions.map(city => (
+							<div 
+								key={city}
+								onMouseDown={() => { setCityInput(city); setShowSuggestions(false); getWeather(city); }}
+								style={{
+									padding: '0.75rem',
+									cursor: 'pointer',
+									fontFamily: 'JetBrains Mono',
+									fontSize: '0.85rem',
+									borderBottom: '1px solid var(--grid-border)',
+									color: 'var(--text-primary)',
+									transition: 'var(--transition-snap)'
+								}}
+								onMouseOver={(e) => { e.target.style.background = 'var(--accent-volt)'; e.target.style.color = 'var(--text-inverse)'; }}
+								onMouseOut={(e) => { e.target.style.background = 'transparent'; e.target.style.color = 'var(--text-primary)'; }}
+							>
+								[LOC_MATCH]: {city}
+							</div>
+						))}
+					</div>
+				)}
 			</div>
 
 			{errorMsg && (
@@ -191,6 +283,9 @@ const WeatherCard = () => {
 			)}
 
 			<div className="weather-info">
+				<div style={{ fontFamily: 'JetBrains Mono', color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem', textAlign: 'center' }}>
+					LOC: {weather.city}
+				</div>
 				<div className="temperature">
 					<div className="temperature-value">{weather.temperature}</div>
 					<div className="weather-condition">{weather.condition}</div>

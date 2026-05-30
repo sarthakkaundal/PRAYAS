@@ -382,13 +382,10 @@ body {
     transition: var(--transition-snap);
 }
 .shelter-item:hover {
-    background: var(--accent-volt);
-    color: var(--text-inverse);
+    background: var(--accent-volt-dim);
+    box-shadow: inset 4px 0 0 0 var(--accent-volt);
     z-index: 1;
     position: relative;
-}
-.shelter-item:hover .shelter-type, .shelter-item:hover .distance-label {
-    color: var(--text-inverse);
 }
 
 .shelter-info {
@@ -439,6 +436,11 @@ body {
     border: 1px solid var(--grid-border);
     margin-bottom: -1px;
     background: var(--bg-base);
+    transition: var(--transition-snap);
+}
+.alert-item:hover {
+    background: var(--accent-volt-dim);
+    box-shadow: inset 4px 0 0 0 var(--accent-volt);
 }
 
 .alert-indicator {
@@ -471,6 +473,11 @@ body {
     border: 1px solid var(--grid-border);
     margin-bottom: -1px;
     background: var(--bg-base);
+    transition: var(--transition-snap);
+}
+.news-item:hover {
+    background: var(--accent-volt-dim);
+    box-shadow: inset 4px 0 0 0 var(--accent-volt);
 }
 
 .news-header {
