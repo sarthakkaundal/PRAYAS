@@ -203,6 +203,7 @@
 			<div>
 				<a
 					href="shelter.html"
+					onclick="this.href='shelter.html' + window.location.search"
 					target="_blank"
 					class="w-full bg-green-500 text-white font-semibold py-3 px-4 rounded-xl hover:bg-green-600 transition-colors flex items-center justify-center"
 				>
@@ -449,22 +450,23 @@
 				remove,
 			} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
+			const urlParams = new URLSearchParams(window.location.search);
 			const firebaseConfig = {
-				apiKey: '',
-				authDomain: '',
-				databaseURL: '',
-				projectId: '',
-				storageBucket: '',
-				messagingSenderId: '',
-				appId: '',
+				apiKey: urlParams.get('fb_key') || '',
+				authDomain: urlParams.get('fb_domain') || '',
+				databaseURL: urlParams.get('fb_url') || '',
+				projectId: urlParams.get('fb_project') || '',
+				storageBucket: urlParams.get('fb_bucket') || '',
+				messagingSenderId: urlParams.get('fb_sender') || '',
+				appId: urlParams.get('fb_app') || '',
 			};
 			const app = initializeApp(firebaseConfig);
 			const db = getDatabase(app);
 
 			document.addEventListener('DOMContentLoaded', function () {
 				// --- 1. CONFIG AND INITIALIZATION ---
-				const OPENWEATHER_API_KEY = '';
-				const MAPTILER_API_KEY = '';
+				const OPENWEATHER_API_KEY = urlParams.get('weather') || '';
+				const MAPTILER_API_KEY = urlParams.get('maptiler') || '';
 				const map = L.map('map').setView([31.634, 74.8723], 13);
 				let currentUserLocation = map.getCenter();
 				let currentAlertLevel = 'Safe';

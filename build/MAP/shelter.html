@@ -108,14 +108,15 @@
 				push,
 			} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
+			const urlParams = new URLSearchParams(window.location.search);
 			const firebaseConfig = {
-				apiKey: '',
-				authDomain: '',
-				databaseURL: '',
-				projectId: '',
-				storageBucket: '',
-				messagingSenderId: '',
-				appId: '',
+				apiKey: urlParams.get('fb_key') || '',
+				authDomain: urlParams.get('fb_domain') || '',
+				databaseURL: urlParams.get('fb_url') || '',
+				projectId: urlParams.get('fb_project') || '',
+				storageBucket: urlParams.get('fb_bucket') || '',
+				messagingSenderId: urlParams.get('fb_sender') || '',
+				appId: urlParams.get('fb_app') || '',
 			};
 			const app = initializeApp(firebaseConfig);
 			const db = getDatabase(app);

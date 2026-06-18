@@ -78,7 +78,7 @@ const Map = () => {
 
         <iframe
           title="Disaster Management Map"
-          src={`${process.env.PUBLIC_URL}/MAP/map61.html`}
+          src={`/MAP/map61.html?maptiler=${process.env.REACT_APP_MAPTILER_API_KEY || ''}&weather=${process.env.REACT_APP_WEATHER_API_KEY || ''}&fb_key=${process.env.REACT_APP_FIREBASE_API_KEY || ''}&fb_domain=${process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || ''}&fb_url=${process.env.REACT_APP_FIREBASE_DATABASE_URL || ''}&fb_project=${process.env.REACT_APP_FIREBASE_PROJECT_ID || ''}&fb_bucket=${process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || ''}&fb_sender=${process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || ''}&fb_app=${process.env.REACT_APP_FIREBASE_APP_ID || ''}`}
           width="100%"
           height="100%"
           style={{ border: 0, display: 'block' }}

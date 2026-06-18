@@ -444,7 +444,7 @@ const NewsList = () => {
 	const [news, setNews] = useState([]);
 
 	const fetchIndiaNews = async () => {
-		const apiKey = '';
+		const apiKey = process.env.REACT_APP_NEWS_API_KEY || '';
 		const url = `https://newsapi.org/v2/everything?q=flood OR disaster AND India&sortBy=publishedAt&language=en&pageSize=5&apiKey=${apiKey}`;
 
 		try {
@@ -526,11 +526,8 @@ const App = () => {
 		</>
 	);
 
-	// Determine if current page should be full width
-	const isFullWidthPage = currentPage === 'map' || currentPage === 'report' || currentPage === 'help' || currentPage === 'funds';
-
 	return (
-		<div className={`container ${isFullWidthPage ? 'full-width' : ''}`}>
+		<div className="w-full min-h-screen bg-base">
 			<Header
 				setCurrentPage={setCurrentPage}
 				currentPage={currentPage}
