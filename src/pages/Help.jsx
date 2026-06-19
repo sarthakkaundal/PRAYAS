@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { getDatabase, ref, push, serverTimestamp } from 'firebase/database';
 import { auth } from './Auth/firebase';
+
 const Help = () => {
   const [formData, setFormData] = useState({
     name: '',
@@ -29,16 +30,11 @@ const Help = () => {
         userId: auth.currentUser ? auth.currentUser.uid : 'anonymous',
         timestamp: serverTimestamp(),
       });
-      alert('TRANSMISSION_SUCCESS: Message logged to system.');
-      setFormData({
-        name: '',
-        email: '',
-        subject: 'General Inquiry',
-        message: ''
-      });
+      alert('Message sent successfully.');
+      setFormData({ name: '', email: '', subject: 'General Inquiry', message: '' });
     } catch (error) {
       console.error("Error sending message: ", error);
-      alert('TRANSMISSION_FAILED: ' + error.message);
+      alert('Failed to send message: ' + error.message);
     }
   };
 
@@ -47,155 +43,160 @@ const Help = () => {
   };
 
   const faqItems = [
-    {
-      question: "SHELTER_UPDATE_PROCEDURE",
-      answer: "Email shelters@prayas.in with ID, LOCATION, CAPACITY, and CONTACT_INFO."
-    },
-    {
-      question: "SYSTEM_MAINTENANCE_SLA",
-      answer: "Priority 1 issues: < 24h. Priority 0 (Emergency): Immediate dispatch."
-    },
-    {
-      question: "FEATURE_REQUEST_PROTOCOL",
-      answer: "Use subject 'Suggest a New Feature'. Telemetry logs will be analyzed for integration."
-    },
-    {
-      question: "THREAT_MODEL_ACCURACY",
-      answer: "Risk indicators aggregate real-time telemetry and historical matrices. Highly accurate, but defer to official emergency broadcasts."
-    }
+    { question: "How do I update shelter information?", answer: "Email shelters@prayas.in with shelter ID, location, capacity, and contact details." },
+    { question: "What is the system maintenance SLA?", answer: "Priority 1 issues are resolved within 24 hours. Emergency (Priority 0) issues receive immediate response." },
+    { question: "How can I suggest a new feature?", answer: "Use the contact form with subject 'Feature Request'. Include detailed description of the proposed feature." },
+    { question: "How accurate is the flood prediction?", answer: "Risk indicators aggregate real-time weather data and historical patterns. Always defer to official emergency broadcasts for critical decisions." }
+  ];
+
+  const inputStyle = {
+    width: '100%',
+    padding: '12px 14px',
+    borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--grid-border)',
+    backgroundColor: 'var(--bg-base)',
+    color: 'var(--text-primary)',
+    fontSize: '13px',
+    fontFamily: "'JetBrains Mono', monospace",
+    outline: 'none',
+    transition: 'border-color 0.2s, box-shadow 0.2s',
+    boxSizing: 'border-box',
+  };
+
+  const focusHandlers = {
+    onFocus: (e) => { e.target.style.borderColor = 'var(--accent-volt)'; e.target.style.boxShadow = '0 0 0 3px var(--accent-volt-dim)'; },
+    onBlur: (e) => { e.target.style.borderColor = 'var(--grid-border)'; e.target.style.boxShadow = 'none'; },
+  };
+
+  const emergencyServices = [
+    { service: 'Police', number: '100', color: '#3b82f6' },
+    { service: 'Ambulance', number: '102', color: '#ef4444' },
+    { service: 'Fire', number: '101', color: '#f97316' },
+    { service: 'Disaster Helpline', number: '1078', color: 'var(--accent-volt)' },
+    { service: 'NDRF HQ', number: '011-24363260', color: '#14b8a6', wide: true },
   ];
 
   return (
-    <div style={{ width: '100%' }}>
-      <div className="p-8 border-b border-grid bg-base">
-        <h1 className="text-2xl font-bold uppercase tracking-wider mb-2">Comms & Support</h1>
-        <p className="font-mono text-sm text-secondary uppercase tracking-widest">SECURE TRANSMISSION CHANNEL</p>
+    <div className="p-4 md:p-8 flex flex-col gap-6 max-w-7xl mx-auto w-full">
+      {/* Header */}
+      <div className="opacity-0 animate-in">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="font-mono text-[10px] font-medium" style={{ color: 'var(--text-tertiary)' }}>01</span>
+          <span className="font-mono text-[10px] font-medium tracking-widest uppercase" style={{ color: 'var(--text-tertiary)' }}>Support & Emergency</span>
+        </div>
+        <div className="rounded-xl p-5 border" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)' }}>
+          <h1 className="text-2xl font-bold tracking-tight mb-0.5">Emergency Coordination Center</h1>
+          <p className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>Contact support and access emergency services</p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[1px] bg-grid">
-        {/* Contact Form */}
-        <div className="flex flex-col bg-base p-8">
-          <div className="flex items-center mb-8">
-            <h2 className="text-[10px] font-mono text-secondary uppercase tracking-widest">TRANSMIT_MESSAGE</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Contact Form — Linear style */}
+        <div className="opacity-0 animate-in" style={{ animationDelay: '0.05s' }}>
+          <div className="rounded-xl border p-6" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)' }}>
+            <h2 className="text-sm font-semibold mb-5 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+              <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: 'var(--accent-volt)' }}></div>
+              Send Message
+            </h2>
+
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div>
+                <label className="block font-mono text-[10px] mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Your Name</label>
+                <input type="text" name="name" value={formData.name} onChange={handleInputChange} required style={inputStyle} {...focusHandlers} />
+              </div>
+              <div>
+                <label className="block font-mono text-[10px] mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Email Address</label>
+                <input type="email" name="email" value={formData.email} onChange={handleInputChange} required style={inputStyle} {...focusHandlers} />
+              </div>
+              <div>
+                <label className="block font-mono text-[10px] mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Category</label>
+                <select name="subject" value={formData.subject} onChange={handleInputChange} style={inputStyle}>
+                  <option value="General Inquiry">General Inquiry</option>
+                  <option value="Technical Support">Technical Support</option>
+                  <option value="Shelter Information Update">Shelter Update</option>
+                  <option value="Report a Bug">Bug Report</option>
+                  <option value="Suggest a New Feature">Feature Request</option>
+                  <option value="Emergency Services">Emergency</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-mono text-[10px] mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Message</label>
+                <textarea name="message" value={formData.message} onChange={handleInputChange} required rows="4" style={{...inputStyle, minHeight: '100px', resize: 'vertical'}} {...focusHandlers} />
+              </div>
+              <button type="submit" style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius-md)', border: 'none', backgroundColor: 'var(--accent-volt)', color: 'var(--text-inverse)', fontWeight: '600', fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit', marginTop: '4px' }} onMouseOver={(e) => { e.target.style.boxShadow = 'var(--shadow-glow-volt)'; }} onMouseOut={(e) => { e.target.style.boxShadow = 'none'; }}>Send Message</button>
+            </form>
           </div>
-
-          <form onSubmit={handleSubmit}>
-            <div className="mb-6">
-              <label className="block font-mono text-[10px] text-secondary mb-2 uppercase tracking-widest">OPERATIVE_NAME</label>
-              <input
-                type="text"
-                name="name"
-                className="w-full bg-transparent border border-grid p-4 text-primary font-mono outline-none focus:border-volt transition-snap"
-                value={formData.name}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
-
-            <div className="mb-6">
-              <label className="block font-mono text-[10px] text-secondary mb-2 uppercase tracking-widest">COMMS_ADDRESS (EMAIL)</label>
-              <input
-                type="email"
-                name="email"
-                className="w-full bg-transparent border border-grid p-4 text-primary font-mono outline-none focus:border-volt transition-snap"
-                value={formData.email}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
-
-            <div className="mb-6">
-              <label className="block font-mono text-[10px] text-secondary mb-2 uppercase tracking-widest">TRANSMISSION_TYPE</label>
-              <select
-                name="subject"
-                className="w-full bg-transparent border border-grid p-4 text-primary font-mono outline-none focus:border-volt transition-snap"
-                value={formData.subject}
-                onChange={handleInputChange}
-              >
-                <option value="General Inquiry" className="bg-base">GENERAL_INQUIRY</option>
-                <option value="Technical Support" className="bg-base">SYS_SUPPORT</option>
-                <option value="Shelter Information Update" className="bg-base">SHELTER_UPDATE</option>
-                <option value="Report a Bug" className="bg-base">BUG_REPORT</option>
-                <option value="Suggest a New Feature" className="bg-base">FEATURE_REQ</option>
-                <option value="Emergency Services" className="bg-base">EMERGENCY_OVERRIDE</option>
-              </select>
-            </div>
-
-            <div className="mb-8">
-              <label className="block font-mono text-[10px] text-secondary mb-2 uppercase tracking-widest">PAYLOAD</label>
-              <textarea
-                name="message"
-                className="w-full bg-transparent border border-grid p-4 text-primary font-mono outline-none focus:border-volt transition-snap min-h-[120px] resize-y"
-                value={formData.message}
-                onChange={handleInputChange}
-                required
-                rows="5"
-              />
-            </div>
-
-            <button type="submit" className="w-full bg-transparent border border-primary px-6 py-4 text-primary font-mono uppercase font-bold hover:bg-primary hover:text-base transition-snap">
-              INITIATE_TRANSFER
-            </button>
-          </form>
         </div>
 
-        {/* Info Cards */}
-        <div className="flex flex-col gap-[1px] bg-grid">
-          <div className="flex flex-col bg-base p-8">
-            <div className="flex items-center mb-8">
-              <h2 className="text-[10px] font-mono text-secondary uppercase tracking-widest">EMERGENCY_FREQUENCIES</h2>
-            </div>
-            <div className="flex flex-col gap-2 font-mono">
-              {[
-                { service: 'POLICE', number: '100' },
-                { service: 'MEDEVAC', number: '102' },
-                { service: 'FIRE_CTRL', number: '101' },
-                { service: 'DISASTER_NET', number: '1078' },
-                { service: 'NDRF_HQ', number: '011-24363260' }
-              ].map((item, index) => (
-                <div key={index} className="flex justify-between p-4 border border-grid bg-transparent">
-                  <span className="text-secondary text-sm">{item.service}</span>
-                  <span className="text-volt font-bold text-sm">{item.number}</span>
+        {/* Right Column */}
+        <div className="flex flex-col gap-5 opacity-0 animate-in" style={{ animationDelay: '0.1s' }}>
+          {/* Emergency Numbers — ArcGIS-style alert cards */}
+          <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)' }}>
+            <h2 className="text-sm font-semibold mb-4 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+              <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: 'var(--status-danger)' }}></div>
+              Emergency Numbers
+            </h2>
+            <div className="grid grid-cols-2 gap-3">
+              {emergencyServices.map((item, index) => (
+                <div key={index} className={`rounded-lg p-3.5 border transition-all duration-200 ${item.wide ? 'col-span-2' : ''}`}
+                  style={{ backgroundColor: `${item.color}08`, borderColor: `${item.color}20`, borderLeft: `3px solid ${item.color}` }}
+                  onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 2px 8px ${item.color}15`; }}
+                  onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
+                  <span className="font-mono text-[9px] uppercase tracking-wider block mb-1" style={{ color: 'var(--text-secondary)' }}>{item.service}</span>
+                  <span className="text-lg font-bold block" style={{ color: item.color }}>{item.number}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="flex flex-col bg-base p-8 h-full">
-            <div className="flex items-center mb-8">
-              <h2 className="text-[10px] font-mono text-secondary uppercase tracking-widest">HQ_COORDINATES</h2>
-            </div>
-            <div className="font-mono text-sm text-secondary leading-relaxed">
-              <p className="text-primary font-bold">NATIONAL DISASTER MGT AUTH</p>
-              <p>NDMA BHAWAN, A-1</p>
-              <p>SAFDARJUNG ENCLAVE</p>
-              <p>NEW DELHI - 110029, IN</p>
+          {/* HQ Info */}
+          <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)' }}>
+            <h2 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--text-secondary)' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+              Headquarters
+            </h2>
+            <div className="rounded-lg p-4 font-mono text-sm leading-relaxed" style={{ backgroundColor: 'var(--bg-base)', border: '1px solid var(--grid-border)', color: 'var(--text-secondary)' }}>
+              <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>National Disaster Management Authority</p>
+              <p>NDMA Bhawan, A-1</p>
+              <p>Safdarjung Enclave</p>
+              <p>New Delhi - 110029, India</p>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div className="flex flex-col bg-base mt-[1px]">
-        <div className="flex items-center p-8 border-b border-grid">
-          <h2 className="text-[10px] font-mono text-secondary uppercase tracking-widest">DATA_LOGS_FAQ</h2>
-        </div>
-        <div className="flex flex-col">
-          {faqItems.map((faq, index) => (
-            <div key={index} className="border-b border-grid">
-              <button
-                onClick={() => toggleFaq(index)}
-                className={`w-full p-6 text-left cursor-pointer flex justify-between font-mono text-sm transition-snap hover:bg-surface ${expandedFaq === index ? 'text-primary' : 'text-secondary'}`}
-              >
-                {faq.question}
-                <span>{expandedFaq === index ? '[-]' : '[+]'}</span>
-              </button>
-              {expandedFaq === index && (
-                <div className="p-6 pt-0 font-mono text-sm text-primary bg-transparent border-l-4 border-volt ml-6 mb-6">
-                  {faq.answer}
-                </div>
-              )}
+          {/* FAQ — with smooth animations */}
+          <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)' }}>
+            <div className="px-5 py-3 border-b" style={{ borderColor: 'var(--grid-border)' }}>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Frequently Asked Questions</h2>
             </div>
-          ))}
+            <div className="flex flex-col">
+              {faqItems.map((faq, index) => (
+                <div key={index} style={{ borderBottom: index < faqItems.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
+                  <button
+                    onClick={() => toggleFaq(index)}
+                    className="w-full p-4 text-left flex justify-between items-center transition-colors duration-150"
+                    style={{ cursor: 'pointer', border: 'none', backgroundColor: 'transparent', fontFamily: 'inherit', fontSize: '13px', color: expandedFaq === index ? 'var(--accent-volt)' : 'var(--text-primary)', fontWeight: '500' }}
+                    onMouseOver={(e) => { if (expandedFaq !== index) e.currentTarget.style.backgroundColor = 'var(--bg-base)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    <span>{faq.question}</span>
+                    <svg className="w-4 h-4 flex-shrink-0 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ transform: expandedFaq === index ? 'rotate(180deg)' : 'rotate(0deg)', color: expandedFaq === index ? 'var(--accent-volt)' : 'var(--text-tertiary)' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                  </button>
+                  <div style={{
+                    maxHeight: expandedFaq === index ? '200px' : '0',
+                    overflow: 'hidden',
+                    transition: 'max-height 0.3s cubic-bezier(0.22, 1, 0.36, 1)',
+                  }}>
+                    <div className="px-4 pb-4">
+                      <div className="rounded-lg p-3 text-sm leading-relaxed" style={{ backgroundColor: 'var(--bg-base)', border: '1px solid var(--grid-border)', borderLeft: '3px solid var(--accent-volt)', color: 'var(--text-secondary)', fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }}>
+                        {faq.answer}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
