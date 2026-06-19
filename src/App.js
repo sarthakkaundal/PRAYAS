@@ -4,9 +4,13 @@ import Reports from './pages/Reports';
 import Map from './pages/Map';
 import Help from './pages/Help';
 import Fund from './pages/Fund'; // Import the Fund component
+import Profile from './pages/Profile';
+import AuthPage from './pages/Auth/AuthPage';
+import { auth } from './pages/Auth/firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 // Header Component
-const Header = ({ setCurrentPage, currentPage, theme, toggleTheme }) => {
+const Header = ({ setCurrentPage, currentPage, theme, toggleTheme, user, handleLogout }) => {
 	const [currentTime, setCurrentTime] = useState('');
 
 	useEffect(() => {
@@ -93,6 +97,16 @@ const Header = ({ setCurrentPage, currentPage, theme, toggleTheme }) => {
 						<span className="font-mono text-xs mt-2 uppercase font-bold">Dashboard</span>
 					</div>
 				)}
+
+				<div
+					className={`flex flex-col items-center justify-center w-24 cursor-pointer border-l border-grid transition-snap group ${currentPage === 'profile' ? 'bg-volt text-inverse' : 'bg-surface hover:bg-volt hover:text-inverse'}`}
+					onClick={() => setCurrentPage('profile')}
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-secondary group-hover:text-inverse transition-snap" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+					</svg>
+					<span className="font-mono text-xs mt-2 uppercase font-bold">Profile</span>
+				</div>
 				
 				<div
 					className="flex flex-col items-center justify-center w-24 cursor-pointer border-l border-grid bg-surface hover:bg-volt hover:text-inverse transition-snap group"
@@ -102,6 +116,16 @@ const Header = ({ setCurrentPage, currentPage, theme, toggleTheme }) => {
 						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d={theme === 'light' ? "M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" : "M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"} />
 					</svg>
 					<span className="font-mono text-xs mt-2 uppercase font-bold">{theme === 'light' ? 'NIGHT' : 'DAY'}</span>
+				</div>
+
+				<div
+					className="flex flex-col items-center justify-center w-24 cursor-pointer border-l border-grid bg-surface hover:bg-red-500 hover:text-white transition-snap group"
+					onClick={handleLogout}
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-secondary group-hover:text-white transition-snap" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+					</svg>
+					<span className="font-mono text-xs mt-2 uppercase font-bold text-red-500 group-hover:text-white transition-snap">Logout</span>
 				</div>
 			</div>
 		</div>
@@ -495,10 +519,34 @@ const NewsList = () => {
 	);
 };
 
+// Footer Component
+const Footer = () => (
+	<div className="flex justify-between items-center p-6 border-t border-grid bg-surface mt-[1px]">
+		<div className="font-mono text-xs text-secondary tracking-widest uppercase">
+			© {new Date().getFullYear()} PRAYAS INITIATIVE
+		</div>
+		<div className="flex gap-6 font-mono text-xs font-bold uppercase">
+			<span className="cursor-pointer text-secondary hover:text-primary transition-snap">Privacy Policy</span>
+			<span className="cursor-pointer text-secondary hover:text-primary transition-snap">Terms of Service</span>
+			<span className="cursor-pointer text-secondary hover:text-primary transition-snap">Contact HQ</span>
+		</div>
+	</div>
+);
+
 // Main App Component
 const App = () => {
 	const [currentPage, setCurrentPage] = useState('dashboard'); // default view
 	const [theme, setTheme] = useState(localStorage.getItem('prayas-theme') || 'dark');
+	const [user, setUser] = useState(null);
+	const [authChecked, setAuthChecked] = useState(false);
+
+	useEffect(() => {
+		const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+			setUser(currentUser);
+			setAuthChecked(true);
+		});
+		return () => unsubscribe();
+	}, []);
 
 	useEffect(() => {
 		document.documentElement.setAttribute('data-theme', theme);
@@ -526,21 +574,45 @@ const App = () => {
 		</>
 	);
 
+	const handleLogout = async () => {
+		try {
+			await signOut(auth);
+			setCurrentPage('dashboard');
+		} catch (error) {
+			console.error('Error logging out:', error);
+		}
+	};
+
+	if (!authChecked) {
+		return <div className="w-full min-h-screen bg-base flex justify-center items-center font-mono text-volt">INITIALIZING_SECURE_CONNECTION...</div>;
+	}
+
+	if (!user) {
+		return <AuthPage setUserLoggedIn={() => {}} />;
+	}
+
 	return (
-		<div className="w-full min-h-screen bg-base">
+		<div className="w-full min-h-screen bg-base flex flex-col">
 			<Header
 				setCurrentPage={setCurrentPage}
 				currentPage={currentPage}
 				theme={theme}
 				toggleTheme={toggleTheme}
+				user={user}
+				handleLogout={handleLogout}
 			/>
 
 			{/* Conditional rendering based on current page */}
-			{currentPage === 'dashboard' && renderDashboard()}
-			{currentPage === 'report' && <Reports />}
-			{currentPage === 'funds' && <Fund />}
-			{currentPage === 'map' && <Map />}
-			{currentPage === 'help' && <Help />}
+			<div className="flex-1">
+				{currentPage === 'dashboard' && renderDashboard()}
+				{currentPage === 'report' && <Reports />}
+				{currentPage === 'funds' && <Fund />}
+				{currentPage === 'map' && <Map />}
+				{currentPage === 'help' && <Help />}
+				{currentPage === 'profile' && <Profile />}
+			</div>
+
+			<Footer />
 		</div>
 	);
 };

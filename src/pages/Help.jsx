@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-
+import { getDatabase, ref, push, serverTimestamp } from 'firebase/database';
+import { auth } from './Auth/firebase';
 const Help = () => {
   const [formData, setFormData] = useState({
     name: '',
@@ -18,15 +19,27 @@ const Help = () => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    alert('TRANSMISSION_SUCCESS');
-    setFormData({
-      name: '',
-      email: '',
-      subject: 'General Inquiry',
-      message: ''
-    });
+    try {
+      const db = getDatabase();
+      const messagesRef = ref(db, 'contact_messages');
+      await push(messagesRef, {
+        ...formData,
+        userId: auth.currentUser ? auth.currentUser.uid : 'anonymous',
+        timestamp: serverTimestamp(),
+      });
+      alert('TRANSMISSION_SUCCESS: Message logged to system.');
+      setFormData({
+        name: '',
+        email: '',
+        subject: 'General Inquiry',
+        message: ''
+      });
+    } catch (error) {
+      console.error("Error sending message: ", error);
+      alert('TRANSMISSION_FAILED: ' + error.message);
+    }
   };
 
   const toggleFaq = (index) => {
