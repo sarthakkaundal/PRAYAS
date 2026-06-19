@@ -8,10 +8,23 @@ import Profile from './pages/Profile';
 import AuthPage from './pages/Auth/AuthPage';
 import { auth } from './pages/Auth/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 
 // Header Component
-const Header = ({ setCurrentPage, currentPage, theme, toggleTheme, user, handleLogout }) => {
+const Header = ({ theme, toggleTheme, user }) => {
 	const [currentTime, setCurrentTime] = useState('');
+	const location = useLocation();
+	const navigate = useNavigate();
+	const currentPage = location.pathname === '/' ? 'dashboard' : location.pathname.substring(1);
+
+	const handleLogout = async () => {
+		try {
+			await signOut(auth);
+			navigate('/');
+		} catch (error) {
+			console.error('Error logging out:', error);
+		}
+	};
 
 	useEffect(() => {
 		const updateTime = () => {
@@ -42,71 +55,67 @@ const Header = ({ setCurrentPage, currentPage, theme, toggleTheme, user, handleL
 	return (
 		<div className="flex justify-between items-stretch border-b border-grid bg-surface sticky top-0 z-[100]">
 			<div className="p-6 border-r border-grid flex-1">
-				<h1 className="text-4xl font-bold uppercase tracking-wider mb-2">PRAYAS</h1>
+				<Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+					<h1 className="text-4xl font-bold uppercase tracking-wider mb-2">PRAYAS</h1>
+				</Link>
 				<p className="font-mono text-sm text-secondary">{currentTime}</p>
 			</div>
 			<div className="flex">
-				<div
+				<Link to="/report" style={{ textDecoration: 'none' }}
 					className={`flex flex-col items-center justify-center w-24 cursor-pointer border-l border-grid transition-snap group ${currentPage === 'report' ? 'bg-volt text-inverse' : 'bg-surface hover:bg-volt hover:text-inverse'}`}
-					onClick={() => setCurrentPage('report')}
 				>
 					<svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-secondary group-hover:text-inverse transition-snap" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 					</svg>
 					<span className="font-mono text-xs mt-2 uppercase font-bold">Reports</span>
-				</div>
+				</Link>
 
-				<div
+				<Link to="/funds" style={{ textDecoration: 'none' }}
 					className={`flex flex-col items-center justify-center w-24 cursor-pointer border-l border-grid transition-snap group ${currentPage === 'funds' ? 'bg-volt text-inverse' : 'bg-surface hover:bg-volt hover:text-inverse'}`}
-					onClick={() => setCurrentPage('funds')}
 				>
 					<svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-secondary group-hover:text-inverse transition-snap" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 					</svg>
 					<span className="font-mono text-xs mt-2 uppercase font-bold">Funds</span>
-				</div>
+				</Link>
 
-				<div
+				<Link to="/map" style={{ textDecoration: 'none' }}
 					className={`flex flex-col items-center justify-center w-24 cursor-pointer border-l border-grid transition-snap group ${currentPage === 'map' ? 'bg-volt text-inverse' : 'bg-surface hover:bg-volt hover:text-inverse'}`}
-					onClick={() => setCurrentPage('map')}
 				>
 					<svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-secondary group-hover:text-inverse transition-snap" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zM12 11a2 2 0 100-4 2 2 0 000 4z" />
 					</svg>
 					<span className="font-mono text-xs mt-2 uppercase font-bold">Map</span>
-				</div>
+				</Link>
 
-				<div
+				<Link to="/help" style={{ textDecoration: 'none' }}
 					className={`flex flex-col items-center justify-center w-24 cursor-pointer border-l border-grid transition-snap group ${currentPage === 'help' ? 'bg-volt text-inverse' : 'bg-surface hover:bg-volt hover:text-inverse'}`}
-					onClick={() => setCurrentPage('help')}
 				>
 					<svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-secondary group-hover:text-inverse transition-snap" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.5 4.5a1 1 0 01-.217 1.013l-2.1 2.1a11.042 11.042 0 005.516 5.516l2.1-2.1a1 1 0 011.013-.217l4.5 1.5a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.163 21 3 14.837 3 7V5z" />
 					</svg>
 					<span className="font-mono text-xs mt-2 uppercase font-bold">Contact</span>
-				</div>
+				</Link>
 
 				{currentPage !== 'dashboard' && (
-					<div
+					<Link to="/" style={{ textDecoration: 'none' }}
 						className="flex flex-col items-center justify-center w-24 cursor-pointer border-l border-grid bg-surface hover:bg-volt hover:text-inverse transition-snap group"
-						onClick={() => setCurrentPage('dashboard')}
 					>
 						<svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-secondary group-hover:text-inverse transition-snap" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 							<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
 						</svg>
 						<span className="font-mono text-xs mt-2 uppercase font-bold">Dashboard</span>
-					</div>
+					</Link>
 				)}
 
-				<div
+				<Link to="/profile" style={{ textDecoration: 'none' }}
 					className={`flex flex-col items-center justify-center w-24 cursor-pointer border-l border-grid transition-snap group ${currentPage === 'profile' ? 'bg-volt text-inverse' : 'bg-surface hover:bg-volt hover:text-inverse'}`}
-					onClick={() => setCurrentPage('profile')}
 				>
 					<svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-secondary group-hover:text-inverse transition-snap" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 						<path strokeLinecap="square" strokeLinejoin="miter" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
 					</svg>
 					<span className="font-mono text-xs mt-2 uppercase font-bold">Profile</span>
-				</div>
+				</Link>
 				
 				<div
 					className="flex flex-col items-center justify-center w-24 cursor-pointer border-l border-grid bg-surface hover:bg-volt hover:text-inverse transition-snap group"
@@ -486,9 +495,9 @@ const NewsList = () => {
 		} catch (error) {
 			console.error('Error fetching news:', error);
 			setNews([
-				{ id: 1, title: 'Local authorities prepare for monsoon season', time: '2 HOURS AGO', url: '#' },
-				{ id: 2, title: 'New flood early warning system installed', time: '4 HOURS AGO', url: '#' },
-				{ id: 3, title: 'Emergency services conduct rescue drills', time: '6 HOURS AGO', url: '#' },
+				{ id: 1, title: 'Local authorities prepare for monsoon season', time: '2 HOURS AGO', url: '' },
+				{ id: 2, title: 'New flood early warning system installed', time: '4 HOURS AGO', url: '' },
+				{ id: 3, title: 'Emergency services conduct rescue drills', time: '6 HOURS AGO', url: '' },
 			]);
 		}
 	};
@@ -526,16 +535,15 @@ const Footer = () => (
 			© {new Date().getFullYear()} PRAYAS INITIATIVE
 		</div>
 		<div className="flex gap-6 font-mono text-xs font-bold uppercase">
-			<span className="cursor-pointer text-secondary hover:text-primary transition-snap">Privacy Policy</span>
-			<span className="cursor-pointer text-secondary hover:text-primary transition-snap">Terms of Service</span>
-			<span className="cursor-pointer text-secondary hover:text-primary transition-snap">Contact HQ</span>
+			<Link to="/" style={{ textDecoration: 'none' }} className="cursor-pointer text-secondary hover:text-primary transition-snap">Privacy Policy</Link>
+			<Link to="/" style={{ textDecoration: 'none' }} className="cursor-pointer text-secondary hover:text-primary transition-snap">Terms of Service</Link>
+			<Link to="/help" style={{ textDecoration: 'none' }} className="cursor-pointer text-secondary hover:text-primary transition-snap">Contact HQ</Link>
 		</div>
 	</div>
 );
 
 // Main App Component
 const App = () => {
-	const [currentPage, setCurrentPage] = useState('dashboard'); // default view
 	const [theme, setTheme] = useState(localStorage.getItem('prayas-theme') || 'dark');
 	const [user, setUser] = useState(null);
 	const [authChecked, setAuthChecked] = useState(false);
@@ -574,15 +582,6 @@ const App = () => {
 		</>
 	);
 
-	const handleLogout = async () => {
-		try {
-			await signOut(auth);
-			setCurrentPage('dashboard');
-		} catch (error) {
-			console.error('Error logging out:', error);
-		}
-	};
-
 	if (!authChecked) {
 		return <div className="w-full min-h-screen bg-base flex justify-center items-center font-mono text-volt">INITIALIZING_SECURE_CONNECTION...</div>;
 	}
@@ -594,22 +593,21 @@ const App = () => {
 	return (
 		<div className="w-full min-h-screen bg-base flex flex-col">
 			<Header
-				setCurrentPage={setCurrentPage}
-				currentPage={currentPage}
 				theme={theme}
 				toggleTheme={toggleTheme}
 				user={user}
-				handleLogout={handleLogout}
 			/>
 
-			{/* Conditional rendering based on current page */}
+			{/* Routes */}
 			<div className="flex-1">
-				{currentPage === 'dashboard' && renderDashboard()}
-				{currentPage === 'report' && <Reports />}
-				{currentPage === 'funds' && <Fund />}
-				{currentPage === 'map' && <Map />}
-				{currentPage === 'help' && <Help />}
-				{currentPage === 'profile' && <Profile />}
+				<Routes>
+					<Route path="/" element={renderDashboard()} />
+					<Route path="/report" element={<Reports />} />
+					<Route path="/funds" element={<Fund />} />
+					<Route path="/map" element={<Map />} />
+					<Route path="/help" element={<Help />} />
+					<Route path="/profile" element={<Profile />} />
+				</Routes>
 			</div>
 
 			<Footer />
