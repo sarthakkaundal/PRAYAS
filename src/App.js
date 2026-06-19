@@ -603,7 +603,7 @@ const App = () => {
 				<Routes>
 					<Route path="/" element={renderDashboard()} />
 					<Route path="/report" element={<Reports />} />
-					<Route path="/funds" element={<Fund />} />
+					<Route path="/funds/*" element={<Fund />} />
 					<Route path="/map" element={<Map />} />
 					<Route path="/help" element={<Help />} />
 					<Route path="/profile" element={<Profile />} />

@@ -43,7 +43,7 @@ const Map = () => {
     position: 'absolute',
     top: '1rem',
     right: '1rem',
-    zIndex: '10000',
+    zIndex: isFullscreen ? '10000' : '90',
     display: 'flex',
     gap: '0'
   };

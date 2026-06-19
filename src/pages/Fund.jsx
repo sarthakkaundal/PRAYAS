@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 const sampleData = {
@@ -200,7 +201,7 @@ const AdminDashboard = ({ onLogout }) => (
 );
 
 const Fund = () => {
-  const [user, setUser] = useState(null);
+  const navigate = useNavigate();
 
   return (
     <div style={{ width: '100%' }}>
@@ -213,9 +214,11 @@ const Fund = () => {
         .data-table tr:hover td { color: var(--text-inverse) !important; }
       `}</style>
       
-      {!user && <LoginPage onLogin={setUser} />}
-      {user === 'public' && <PublicDashboard onLogout={() => setUser(null)} />}
-      {user === 'admin' && <AdminDashboard onLogout={() => setUser(null)} />}
+      <Routes>
+        <Route path="/" element={<LoginPage onLogin={(role) => navigate(`/funds/${role}`)} />} />
+        <Route path="/public" element={<PublicDashboard onLogout={() => navigate('/funds')} />} />
+        <Route path="/admin" element={<AdminDashboard onLogout={() => navigate('/funds')} />} />
+      </Routes>
     </div>
   );
 };
