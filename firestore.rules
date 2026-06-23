@@ -1,0 +1,60 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Function to get the current user's role
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    // Function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    match /users/{userId} {
+      // Any authenticated user can read user profiles (needed for basic display)
+      // Only the user themselves or SuperAdmin can update their profile.
+      // Anyone can create their own profile during signup.
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && (request.auth.uid == userId || getUserRole() == 'SuperAdmin');
+      allow delete: if isAuthenticated() && getUserRole() == 'SuperAdmin';
+    }
+
+    match /reports/{reportId} {
+      // Anyone authenticated can view reports
+      allow read: if isAuthenticated();
+      
+      // Anyone authenticated can create a report
+      allow create: if isAuthenticated();
+      
+      // Only Responder, RegionalAdmin, and SuperAdmin can update a report (e.g. status)
+      // Or the user who created it (if we want them to be able to edit)
+      allow update: if isAuthenticated() && (
+        getUserRole() in ['Responder', 'RegionalAdmin', 'SuperAdmin'] || 
+        resource.data.reportedBy == request.auth.uid
+      );
+      
+      // Only Admins can delete reports
+      allow delete: if isAuthenticated() && getUserRole() in ['RegionalAdmin', 'SuperAdmin'];
+    }
+
+    match /fund_inflows/{inflowId} {
+      // Anyone authenticated can view funds
+      allow read: if isAuthenticated();
+      
+      // Only RegionalAdmin and SuperAdmin can manage funds
+      allow write: if isAuthenticated() && getUserRole() in ['RegionalAdmin', 'SuperAdmin'];
+    }
+
+    match /fund_outflows/{outflowId} {
+      // Anyone authenticated can view funds
+      allow read: if isAuthenticated();
+      
+      // Only RegionalAdmin and SuperAdmin can manage funds
+      allow write: if isAuthenticated() && getUserRole() in ['RegionalAdmin', 'SuperAdmin'];
+    }
+  }
+}

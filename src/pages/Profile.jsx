@@ -1,29 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { getDatabase, ref, get } from 'firebase/database';
-import { auth } from './Auth/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, db } from './Auth/firebase';
 
 const Profile = () => {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      if (auth.currentUser) {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
         try {
-          const database = getDatabase();
-          const userRef = ref(database, 'users/' + auth.currentUser.uid);
-          const snapshot = await get(userRef);
+          const userRef = doc(db, 'users', user.uid);
+          const snapshot = await getDoc(userRef);
           if (snapshot.exists()) {
-            setUserData(snapshot.val());
+            setUserData(snapshot.data());
+          } else {
+            setUserData(null);
           }
         } catch (error) {
           console.error("Error fetching user data:", error);
         }
+      } else {
+        setUserData(null);
       }
       setLoading(false);
-    };
+    });
 
-    fetchUserData();
+    return () => unsubscribe();
   }, []);
 
   if (loading) {
@@ -89,7 +93,7 @@ const Profile = () => {
                 {userData.firstName?.[0]}{userData.lastName?.[0]}
               </div>
               <h3 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{userData.firstName} {userData.lastName}</h3>
-              <span className="font-mono text-[10px] mt-1.5 px-2.5 py-0.5 rounded-full tracking-wider uppercase" style={{ backgroundColor: 'var(--accent-volt-dim)', color: 'var(--accent-volt)', border: '1px solid rgba(204,255,0,0.15)' }}>Verified</span>
+              <span className="font-mono text-[10px] mt-1.5 px-2.5 py-0.5 rounded-full tracking-wider uppercase" style={{ backgroundColor: 'var(--accent-volt-dim)', color: 'var(--accent-volt)', border: '1px solid rgba(204,255,0,0.15)' }}>{userData.role || 'Citizen'}</span>
             </div>
 
             {/* Details */}

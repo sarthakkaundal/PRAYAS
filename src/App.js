@@ -10,6 +10,9 @@ import { auth } from './pages/Auth/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from './pages/Auth/firebase';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // ─── Gauge Component (ArcGIS-inspired) ──────────────────────────────
 const RiskGauge = ({ value = 87, size = 160 }) => {
@@ -220,10 +223,12 @@ const DashboardView = () => {
 		pressure: '1012 hPa'
 	});
 
-	const getWeather = async () => {
+	const getWeather = async (lat, lon) => {
 		const apiKey = process.env.REACT_APP_WEATHER_API_KEY || ''; 
 		if (!apiKey) return;
-		const url = `https://api.openweathermap.org/data/2.5/weather?q=Delhi&units=metric&appid=${apiKey}`;
+		const url = (lat && lon) 
+			? `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`
+			: `https://api.openweathermap.org/data/2.5/weather?q=Delhi&units=metric&appid=${apiKey}`;
 		try {
 			const response = await fetch(url);
 			const data = await response.json();
@@ -244,7 +249,14 @@ const DashboardView = () => {
 	};
 
 	useEffect(() => {
-		getWeather();
+		if (navigator.geolocation) {
+			navigator.geolocation.getCurrentPosition(
+				(pos) => getWeather(pos.coords.latitude, pos.coords.longitude),
+				() => getWeather() // Fallback
+			);
+		} else {
+			getWeather();
+		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
@@ -449,11 +461,24 @@ const Footer = () => (
 const App = () => {
 	const [theme, setTheme] = useState(localStorage.getItem('prayas-theme') || 'dark');
 	const [user, setUser] = useState(null);
+	const [userDoc, setUserDoc] = useState(null);
 	const [authChecked, setAuthChecked] = useState(false);
 
 	useEffect(() => {
-		const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+		const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
 			setUser(currentUser);
+			if (currentUser) {
+				try {
+					const snapshot = await getDoc(doc(db, 'users', currentUser.uid));
+					if (snapshot.exists()) {
+						setUserDoc(snapshot.data());
+					}
+				} catch (err) {
+					console.error("Failed to fetch user role", err);
+				}
+			} else {
+				setUserDoc(null);
+			}
 			setAuthChecked(true);
 		});
 		return () => unsubscribe();
@@ -495,7 +520,11 @@ const App = () => {
 				<Routes>
 					<Route path="/" element={<DashboardView />} />
 					<Route path="/report" element={<Reports />} />
-					<Route path="/funds/*" element={<Fund />} />
+					<Route path="/funds/*" element={
+						<ProtectedRoute userDoc={userDoc} allowedRoles={['Citizen', 'Responder', 'RegionalAdmin', 'SuperAdmin']}>
+							<Fund />
+						</ProtectedRoute>
+					} />
 					<Route path="/map" element={<Map />} />
 					<Route path="/help" element={<Help />} />
 					<Route path="/profile" element={<Profile />} />
