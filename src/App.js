@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { calculateFloodRisk, generateTrendData } from './services/floodPredictionService';
+import { getWeather } from './services/weatherService';
 
 import Reports from './pages/Reports';
 import Map from './pages/Map';
@@ -223,51 +225,42 @@ const DashboardView = () => {
 		pressure: '1012 hPa'
 	});
 
-	const getWeather = async (lat, lon) => {
-		const apiKey = process.env.REACT_APP_WEATHER_API_KEY || ''; 
-		if (!apiKey) return;
-		const url = (lat && lon) 
-			? `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`
-			: `https://api.openweathermap.org/data/2.5/weather?q=Delhi&units=metric&appid=${apiKey}`;
-		try {
-			const response = await fetch(url);
-			const data = await response.json();
-			if (data.cod === 200 || data.cod === "200") {
-				setWeather({
-					city: data.name.toUpperCase(),
-					temperature: `${Math.round(data.main.temp)}°`,
-					condition: data.weather[0].description.toUpperCase(),
-					humidity: `${data.main.humidity}%`,
-					rainfall: data.rain ? `${data.rain['1h'] || data.rain['3h'] || 0}mm` : '0.0mm',
-					wind: `${data.wind.speed} km/h`,
-					pressure: `${data.main.pressure} hPa`
-				});
-			}
-		} catch (error) {
-			console.error('Error fetching weather data:', error);
+	const [prediction, setPrediction] = useState(null);
+	const [trendData, setTrendData] = useState([]);
+
+	const fetchWeatherAndPredict = async (lat, lon) => {
+		const weatherData = await getWeather(lat, lon);
+		if (weatherData) {
+			setWeather({
+				city: weatherData.name.toUpperCase(),
+				temperature: `${Math.round(weatherData.main.temp)}°`,
+				condition: weatherData.weather[0].description.toUpperCase(),
+				humidity: `${weatherData.main.humidity}%`,
+				rainfall: weatherData.rain ? `${weatherData.rain['1h'] || weatherData.rain['3h'] || 0}mm` : '0.0mm',
+				wind: `${weatherData.wind.speed} m/s`,
+				pressure: `${weatherData.main.pressure} hPa`
+			});
+			
+			// Calculate prediction based on live weather data
+			const result = calculateFloodRisk(weatherData);
+			setPrediction(result);
+			setTrendData(generateTrendData(result.score, weatherData.main.pressure));
 		}
 	};
 
 	useEffect(() => {
 		if (navigator.geolocation) {
 			navigator.geolocation.getCurrentPosition(
-				(pos) => getWeather(pos.coords.latitude, pos.coords.longitude),
-				() => getWeather() // Fallback
+				(pos) => fetchWeatherAndPredict(pos.coords.latitude, pos.coords.longitude),
+				() => fetchWeatherAndPredict() // Fallback
 			);
 		} else {
-			getWeather();
+			fetchWeatherAndPredict();
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	const chartData = [
-		{ time: '00:00', prob: 20 },
-		{ time: '04:00', prob: 25 },
-		{ time: '08:00', prob: 45 },
-		{ time: '12:00', prob: 60 },
-		{ time: '16:00', prob: 85 },
-		{ time: '20:00', prob: 87 },
-	];
+	// Replaced static chart data with trendData state
 
 	const weatherMetrics = [
 		{ label: 'Temperature', value: weather.temperature, trend: '↑ 2°', color: '#f97316', icon: '🌡' },
@@ -295,25 +288,47 @@ const DashboardView = () => {
 					<span className="font-mono text-[10px] font-medium tracking-widest uppercase" style={{ color: 'var(--text-tertiary)' }}>Critical Alert</span>
 				</div>
 
-				<div className="rounded-xl p-6 md:p-8 border relative overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-glow-danger)' }}>
-					<div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: 'var(--status-danger)' }}></div>
+				<div className="rounded-xl p-6 md:p-8 border relative overflow-hidden flex flex-col gap-6" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: prediction?.score > 60 ? 'var(--shadow-glow-danger)' : 'var(--shadow-card)' }}>
+					<div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: prediction?.color || 'var(--text-tertiary)' }}></div>
 
 					<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 pl-3">
 						<div>
-							<div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full mb-4" style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
-								<div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: 'var(--status-danger)' }}></div>
-								<span className="font-mono text-[10px] font-semibold tracking-wider uppercase" style={{ color: 'var(--status-danger)' }}>Critical Alert</span>
+							<div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full mb-4" style={{ backgroundColor: prediction?.color ? `${prediction.color}15` : 'transparent', border: `1px solid ${prediction?.color ? prediction.color + '40' : 'transparent'}` }}>
+								<div className={`w-1.5 h-1.5 rounded-full ${prediction?.score > 60 ? 'animate-pulse' : ''}`} style={{ backgroundColor: prediction?.color || 'var(--text-tertiary)' }}></div>
+								<span className="font-mono text-[10px] font-semibold tracking-wider uppercase" style={{ color: prediction?.color || 'var(--text-tertiary)' }}>
+									{prediction?.level || 'Analyzing'} RISK
+								</span>
 							</div>
-							<h2 className="text-4xl md:text-5xl font-bold mb-1 tracking-tight" style={{ color: 'var(--text-primary)' }}>HIGH RISK</h2>
+							<h2 className="text-4xl md:text-5xl font-bold mb-1 tracking-tight" style={{ color: 'var(--text-primary)' }}>
+								{prediction?.level?.toUpperCase() || 'UNKNOWN'} RISK
+							</h2>
 							<p className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
-								Region: {weather.city}  ·  Live Telemetry
+								Region: {weather.city}  ·  Live Telemetry  ·  Confidence: {prediction?.confidence || '--'}
 							</p>
 						</div>
 						<div className="flex flex-col items-center">
-							<RiskGauge value={87} size={180} />
+							<RiskGauge value={prediction?.score || 0} size={180} />
 							<p className="font-mono text-[10px] tracking-wider uppercase mt-1" style={{ color: 'var(--text-secondary)' }}>Flood Probability</p>
 						</div>
 					</div>
+					
+					{prediction && (
+						<div className="pl-3 mt-2 border-t pt-4" style={{ borderColor: 'var(--grid-border)' }}>
+							<p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--text-primary)' }}>
+								<span className="font-semibold">AI Analysis:</span> {prediction.explanation}
+							</p>
+							
+							<div className="flex flex-col gap-1.5">
+								<span className="font-mono text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>Emergency Recommendations</span>
+								{prediction.recommendations.map((rec, idx) => (
+									<div key={idx} className="flex items-center gap-2">
+										<div className="w-1 h-1 rounded-full" style={{ backgroundColor: prediction.color }}></div>
+										<span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{rec}</span>
+									</div>
+								))}
+							</div>
+						</div>
+					)}
 				</div>
 			</div>
 
@@ -393,11 +408,11 @@ const DashboardView = () => {
 						</div>
 						<div className="h-[220px] w-full">
 							<ResponsiveContainer width="100%" height="100%">
-								<AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+									<AreaChart data={trendData.length ? trendData : [{time: '00:00', prob: 0}]} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
 									<defs>
 										<linearGradient id="colorProb" x1="0" y1="0" x2="0" y2="1">
-										<stop offset="5%" stopColor="#ef4444" stopOpacity={0.2}/>
-										<stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+										<stop offset="5%" stopColor={prediction?.color || "#ef4444"} stopOpacity={0.2}/>
+										<stop offset="95%" stopColor={prediction?.color || "#ef4444"} stopOpacity={0}/>
 										</linearGradient>
 									</defs>
 									<CartesianGrid strokeDasharray="3 3" stroke="var(--grid-border)" vertical={false} />
@@ -409,7 +424,7 @@ const DashboardView = () => {
 										itemStyle={{ color: 'var(--text-primary)' }}
 										labelStyle={{ color: 'var(--text-secondary)', fontSize: '10px' }}
 									/>
-									<Area type="monotone" dataKey="prob" stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#colorProb)" dot={false} activeDot={{ r: 4, fill: '#ef4444', stroke: 'var(--bg-surface)', strokeWidth: 2 }} />
+									<Area type="monotone" dataKey="prob" stroke={prediction?.color || "#ef4444"} strokeWidth={2} fillOpacity={1} fill="url(#colorProb)" dot={false} activeDot={{ r: 4, fill: prediction?.color || "#ef4444", stroke: 'var(--bg-surface)', strokeWidth: 2 }} />
 								</AreaChart>
 							</ResponsiveContainer>
 						</div>
