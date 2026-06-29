@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { calculateFloodRisk, generateTrendData } from './services/floodPredictionService';
-import { getWeather } from './services/weatherService';
+import { getWeather, getWeatherByCity } from './services/weatherService';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
 
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 import Reports from './pages/Reports';
 import Map from './pages/Map';
 import Help from './pages/Help';
@@ -15,6 +20,22 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './pages/Auth/firebase';
 import ProtectedRoute from './components/ProtectedRoute';
+
+let DefaultIcon = L.icon({
+    iconUrl: icon,
+    shadowUrl: iconShadow,
+    iconAnchor: [12, 41]
+});
+L.Marker.prototype.options.icon = DefaultIcon;
+
+const LocationMarker = ({ position, setPosition }) => {
+  useMapEvents({
+    click(e) {
+      setPosition({ lat: e.latlng.lat, lng: e.latlng.lng, address: `${e.latlng.lat.toFixed(4)}°N, ${e.latlng.lng.toFixed(4)}°E` });
+    },
+  });
+  return position.lat ? <Marker position={[position.lat, position.lng]} /> : null;
+};
 
 // ─── Gauge Component (ArcGIS-inspired) ──────────────────────────────
 const RiskGauge = ({ value = 87, size = 160 }) => {
@@ -227,8 +248,15 @@ const DashboardView = () => {
 
 	const [prediction, setPrediction] = useState(null);
 	const [trendData, setTrendData] = useState([]);
+	const [isLoading, setIsLoading] = useState(false);
+
+	const [locationMode, setLocationMode] = useState('browser');
+	const [showMapModal, setShowMapModal] = useState(false);
+	const [customLocation, setCustomLocation] = useState({ lat: null, lng: null, address: '' });
+	const [searchCity, setSearchCity] = useState('');
 
 	const fetchWeatherAndPredict = async (lat, lon) => {
+		setIsLoading(true);
 		const weatherData = await getWeather(lat, lon);
 		if (weatherData) {
 			setWeather({
@@ -246,9 +274,34 @@ const DashboardView = () => {
 			setPrediction(result);
 			setTrendData(generateTrendData(result.score, weatherData.main.pressure));
 		}
+		setIsLoading(false);
 	};
 
-	useEffect(() => {
+	const fetchWeatherAndPredictByCity = async (city) => {
+		setIsLoading(true);
+		const weatherData = await getWeatherByCity(city);
+		if (weatherData) {
+			setWeather({
+				city: weatherData.name.toUpperCase(),
+				temperature: `${Math.round(weatherData.main.temp)}°`,
+				condition: weatherData.weather[0].description.toUpperCase(),
+				humidity: `${weatherData.main.humidity}%`,
+				rainfall: weatherData.rain ? `${weatherData.rain['1h'] || weatherData.rain['3h'] || 0}mm` : '0.0mm',
+				wind: `${weatherData.wind.speed} m/s`,
+				pressure: `${weatherData.main.pressure} hPa`
+			});
+			
+			// Calculate prediction based on live weather data
+			const result = calculateFloodRisk(weatherData);
+			setPrediction(result);
+			setTrendData(generateTrendData(result.score, weatherData.main.pressure));
+		} else {
+			alert(`Could not find weather data for "${city}".`);
+		}
+		setIsLoading(false);
+	};
+
+	const detectLocation = () => {
 		if (navigator.geolocation) {
 			navigator.geolocation.getCurrentPosition(
 				(pos) => fetchWeatherAndPredict(pos.coords.latitude, pos.coords.longitude),
@@ -257,8 +310,43 @@ const DashboardView = () => {
 		} else {
 			fetchWeatherAndPredict();
 		}
+	};
+
+	const handleCitySearch = () => {
+		if (searchCity.trim()) {
+			fetchWeatherAndPredictByCity(searchCity.trim());
+		} else {
+			alert("Please enter a city or region name.");
+		}
+	};
+
+	const handleMapLocationConfirm = () => {
+		if (customLocation.lat && customLocation.lng) {
+			fetchWeatherAndPredict(customLocation.lat, customLocation.lng);
+			setShowMapModal(false);
+		} else {
+			alert("Please click on the map to drop a pin.");
+		}
+	};
+
+	useEffect(() => {
+		detectLocation();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
+
+	const inputStyle = {
+		width: '100%',
+		padding: '10px 14px',
+		borderRadius: 'var(--radius-md)',
+		border: '1px solid var(--grid-border)',
+		backgroundColor: 'var(--bg-base)',
+		color: 'var(--text-primary)',
+		fontSize: '13px',
+		fontFamily: "'JetBrains Mono', monospace",
+		outline: 'none',
+		transition: 'border-color 0.2s, box-shadow 0.2s',
+		boxSizing: 'border-box',
+	};
 
 	// Replaced static chart data with trendData state
 
@@ -280,6 +368,47 @@ const DashboardView = () => {
 
 	return (
 		<div className="p-4 md:p-8 flex flex-col gap-6 max-w-7xl mx-auto w-full">
+
+			{/* Location Selector */}
+			<div className="opacity-0 animate-in">
+				<div className="rounded-xl p-5 border" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)' }}>
+					<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+						<div>
+							<h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Target Region</h3>
+							<p className="font-mono text-[10px]" style={{ color: 'var(--text-secondary)' }}>Select location to predict flood risk</p>
+						</div>
+						
+						<div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+							<div className="flex gap-1 p-1 rounded-md" style={{ backgroundColor: 'var(--bg-base)', border: '1px solid var(--grid-border)' }}>
+								<button onClick={() => setLocationMode('browser')} className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-wider rounded transition-colors" style={{ backgroundColor: locationMode === 'browser' ? 'var(--bg-surface-elevated)' : 'transparent', color: locationMode === 'browser' ? 'var(--text-primary)' : 'var(--text-secondary)' }}>Auto (GPS)</button>
+								<button onClick={() => setLocationMode('map')} className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-wider rounded transition-colors" style={{ backgroundColor: locationMode === 'map' ? 'var(--bg-surface-elevated)' : 'transparent', color: locationMode === 'map' ? 'var(--text-primary)' : 'var(--text-secondary)' }}>Map Pin</button>
+								<button onClick={() => setLocationMode('search')} className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-wider rounded transition-colors" style={{ backgroundColor: locationMode === 'search' ? 'var(--bg-surface-elevated)' : 'transparent', color: locationMode === 'search' ? 'var(--text-primary)' : 'var(--text-secondary)' }}>Search Region</button>
+							</div>
+
+							<div className="flex gap-2 w-full md:w-auto min-w-[200px]">
+								{locationMode === 'browser' && (
+									<button onClick={detectLocation} disabled={isLoading} style={{...inputStyle, fontWeight: '600', textTransform: 'uppercase', fontSize: '11px', cursor: isLoading ? 'wait' : 'pointer', opacity: isLoading ? 0.5 : 1, backgroundColor: 'var(--accent-volt)', color: 'var(--text-inverse)', border: 'none' }}>
+										{isLoading ? 'Syncing...' : 'Sync Current Location'}
+									</button>
+								)}
+
+								{locationMode === 'map' && (
+									<button onClick={() => setShowMapModal(true)} style={{...inputStyle, fontWeight: '600', textTransform: 'uppercase', fontSize: '11px', cursor: 'pointer', backgroundColor: 'var(--bg-surface-elevated)' }}>
+										Open Interactive Map
+									</button>
+								)}
+
+								{locationMode === 'search' && (
+									<div className="flex gap-2 w-full">
+										<input type="text" placeholder="e.g. Mumbai, Assam" value={searchCity} onChange={(e) => setSearchCity(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter') handleCitySearch(); }} style={{...inputStyle, padding: '8px', flex: 1}} />
+										<button onClick={handleCitySearch} disabled={isLoading} style={{...inputStyle, padding: '8px 12px', width: 'auto', fontWeight: '600', textTransform: 'uppercase', fontSize: '11px', cursor: isLoading ? 'wait' : 'pointer', opacity: isLoading ? 0.5 : 1, backgroundColor: 'var(--accent-volt)', color: 'var(--text-inverse)', border: 'none' }}>Search</button>
+									</div>
+								)}
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
 
 			{/* ── SECTION 01: CRITICAL ALERT ── */}
 			<div className="opacity-0 animate-in">
@@ -454,6 +583,38 @@ const DashboardView = () => {
 					</div>
 				</div>
 			</div>
+
+			{/* Map Modal */}
+			{showMapModal && (
+				<div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
+					<div className="rounded-xl overflow-hidden flex flex-col w-full max-w-2xl border" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', height: '60vh' }}>
+						<div className="p-3 border-b flex justify-between items-center" style={{ borderColor: 'var(--grid-border)' }}>
+							<h3 className="text-sm font-semibold">Select Prediction Target</h3>
+							<button onClick={() => setShowMapModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>✕</button>
+						</div>
+						<div className="flex-1">
+							<MapContainer center={[20.5937, 78.9629]} zoom={4} style={{ height: '100%', width: '100%' }}>
+								<TileLayer
+									url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+									attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+								/>
+								<LocationMarker position={customLocation} setPosition={setCustomLocation} />
+							</MapContainer>
+						</div>
+						<div className="p-3 border-t flex justify-between items-center" style={{ borderColor: 'var(--grid-border)' }}>
+							<span className="font-mono text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+								{customLocation.lat ? `Selected: ${customLocation.lat.toFixed(4)}, ${customLocation.lng.toFixed(4)}` : 'Click anywhere on the map'}
+							</span>
+							<button 
+								onClick={handleMapLocationConfirm}
+								style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: 'none', backgroundColor: 'var(--accent-volt)', color: 'var(--text-inverse)', fontWeight: '600', fontSize: '12px', cursor: 'pointer' }}
+							>
+								Run Prediction Engine
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 };
