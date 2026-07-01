@@ -1,25 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { calculateFloodRisk, generateTrendData } from './services/floodPredictionService';
+import { savePrediction, generateAlert } from './services/telemetryService';
 import { getWeather, getWeatherByCity } from './services/weatherService';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-import Reports from './pages/Reports';
-import Map from './pages/Map';
-import Help from './pages/Help';
-import Fund from './pages/Fund';
-import Profile from './pages/Profile';
-import AuthPage from './pages/Auth/AuthPage';
-import { auth } from './pages/Auth/firebase';
+import { auth, db } from './pages/Auth/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from './pages/Auth/firebase';
+import { doc, getDoc, collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import ProtectedRoute from './components/ProtectedRoute';
+
+const Reports = lazy(() => import('./pages/Reports'));
+const Map = lazy(() => import('./pages/Map'));
+const Help = lazy(() => import('./pages/Help'));
+const Fund = lazy(() => import('./pages/Fund'));
+const Profile = lazy(() => import('./pages/Profile'));
+const AuthPage = lazy(() => import('./pages/Auth/AuthPage'));
+const AdminAnalytics = lazy(() => import('./pages/AdminAnalytics'));
 
 let DefaultIcon = L.icon({
     iconUrl: icon,
@@ -79,9 +80,11 @@ const RiskGauge = ({ value = 87, size = 160 }) => {
 // ─── Header Component (Linear + Palantir) ──────────────────────────
 const Header = ({ theme, toggleTheme, user }) => {
 	const [currentTime, setCurrentTime] = useState('');
+	const [isProfileHovered, setIsProfileHovered] = useState(false);
 	const location = useLocation();
 	const navigate = useNavigate();
 	const currentPage = location.pathname === '/' ? 'dashboard' : location.pathname.substring(1);
+	const isAdmin = user && (user.role === 'RegionalAdmin' || user.role === 'SuperAdmin');
 
 	const handleLogout = async () => {
 		try {
@@ -124,6 +127,10 @@ const Header = ({ theme, toggleTheme, user }) => {
 		{ path: '/map', label: 'Map', icon: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zM12 11a2 2 0 100-4 2 2 0 000 4z' },
 		{ path: '/help', label: 'Contact', icon: 'M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.5 4.5a1 1 0 01-.217 1.013l-2.1 2.1a11.042 11.042 0 005.516 5.516l2.1-2.1a1 1 0 011.013-.217l4.5 1.5a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.163 21 3 14.837 3 7V5z' },
 	];
+
+	if (isAdmin) {
+		navItems.push({ path: '/admin', label: 'Admin', icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' });
+	}
 
 	return (
 		<header className="sticky top-0 z-[100] border-b border-grid" style={{ backgroundColor: 'var(--bg-surface)', backdropFilter: 'blur(16px)' }}>
@@ -184,25 +191,6 @@ const Header = ({ theme, toggleTheme, user }) => {
 						);
 					})}
 
-					<Link
-						to="/profile"
-						className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-150 no-underline"
-						style={{
-							textDecoration: 'none',
-							color: currentPage === 'profile' ? 'var(--text-primary)' : 'var(--text-secondary)',
-							backgroundColor: currentPage === 'profile' ? 'var(--bg-surface-elevated)' : 'transparent',
-						}}
-						onMouseOver={(e) => { if (currentPage !== 'profile') { e.currentTarget.style.backgroundColor = 'var(--bg-surface-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; } }}
-						onMouseOut={(e) => { if (currentPage !== 'profile') { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; } }}
-					>
-						<svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-							<path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-						</svg>
-						<span className="hidden lg:inline">Profile</span>
-					</Link>
-
-					<div className="h-5 w-px mx-1" style={{ backgroundColor: 'var(--grid-border)' }}></div>
-
 					{/* Theme Toggle */}
 					<button
 						className="flex items-center justify-center w-8 h-8 rounded-md transition-all duration-150"
@@ -216,18 +204,66 @@ const Header = ({ theme, toggleTheme, user }) => {
 						</svg>
 					</button>
 
-					{/* Logout */}
-					<button
-						className="flex items-center justify-center w-8 h-8 rounded-md transition-all duration-150"
-						onClick={handleLogout}
-						style={{ backgroundColor: 'transparent', color: 'var(--text-secondary)', border: 'none', cursor: 'pointer' }}
-						onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = 'var(--status-danger)'; }}
-						onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+					<div className="h-5 w-px mx-1" style={{ backgroundColor: 'var(--grid-border)' }}></div>
+
+					{/* Profile Dropdown */}
+					<div 
+						className="relative ml-1 flex items-center border"
+						onMouseEnter={() => setIsProfileHovered(true)}
+						onMouseLeave={() => setIsProfileHovered(false)}
 					>
-						<svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-							<path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-						</svg>
-					</button>
+						<button
+							className="flex items-center justify-center w-8 h-8 rounded-full overflow-hidden border border-transparent transition-all duration-150 focus:outline-none cursor-pointer"
+							style={{ backgroundColor: 'var(--bg-surface-elevated)', borderColor: isProfileHovered ? 'var(--text-secondary)' : 'transparent' }}
+						>
+							{user && user.photoURL ? (
+								<img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+							) : (
+								<span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+									{user && user.displayName ? user.displayName.charAt(0).toUpperCase() : (user && user.email ? user.email.charAt(0).toUpperCase() : 'U')}
+								</span>
+							)}
+						</button>
+						
+						{/* Dropdown Menu */}
+						<div 
+							className="absolute transition-all duration-200"
+							style={{ 
+								zIndex: 110,
+								right: 0,
+								top: '100%',
+								paddingTop: '0.5rem',
+								opacity: isProfileHovered ? 1 : 0,
+								visibility: isProfileHovered ? 'visible' : 'hidden',
+								pointerEvents: isProfileHovered ? 'auto' : 'none'
+							}}
+						>
+							<div 
+								className="rounded-md shadow-lg py-1 overflow-hidden"
+								style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--grid-border)', minWidth: '130px' }}
+							>
+								<Link
+									to="/profile"
+									className="block px-4 py-2 text-sm transition-colors duration-150 no-underline"
+									style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}
+									onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-surface-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+									onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+									onClick={() => setIsProfileHovered(false)}
+								>
+									Profile
+								</Link>
+								<button
+									onClick={() => { setIsProfileHovered(false); handleLogout(); }}
+									className="block w-full text-left px-4 py-2 text-sm transition-colors duration-150 border-t"
+									style={{ color: 'var(--status-danger)', borderTopColor: 'var(--grid-border)', border: 'none', borderTop: '1px solid var(--grid-border)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+									onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.1)'; }}
+									onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+								>
+									Log Out
+								</button>
+							</div>
+						</div>
+					</div>
 				</nav>
 			</div>
 		</header>
@@ -255,6 +291,9 @@ const DashboardView = () => {
 	const [customLocation, setCustomLocation] = useState({ lat: null, lng: null, address: '' });
 	const [searchCity, setSearchCity] = useState('');
 
+	const [recentAlerts, setRecentAlerts] = useState([]);
+	const [historicalPredictions, setHistoricalPredictions] = useState([]);
+
 	const fetchWeatherAndPredict = async (lat, lon) => {
 		setIsLoading(true);
 		const weatherData = await getWeather(lat, lon);
@@ -273,6 +312,10 @@ const DashboardView = () => {
 			const result = calculateFloodRisk(weatherData);
 			setPrediction(result);
 			setTrendData(generateTrendData(result.score, weatherData.main.pressure));
+			
+			// Telemetry Tracking
+			savePrediction(result, weatherData);
+			generateAlert(result, weatherData);
 		}
 		setIsLoading(false);
 	};
@@ -295,6 +338,10 @@ const DashboardView = () => {
 			const result = calculateFloodRisk(weatherData);
 			setPrediction(result);
 			setTrendData(generateTrendData(result.score, weatherData.main.pressure));
+			
+			// Telemetry Tracking
+			savePrediction(result, weatherData);
+			generateAlert(result, weatherData);
 		} else {
 			alert(`Could not find weather data for "${city}".`);
 		}
@@ -331,8 +378,43 @@ const DashboardView = () => {
 
 	useEffect(() => {
 		detectLocation();
+
+		const qAlerts = query(collection(db, 'alerts'), orderBy('timestamp', 'desc'), limit(3));
+		const unsubAlerts = onSnapshot(qAlerts, (snapshot) => {
+			const arr = [];
+			snapshot.forEach(doc => arr.push({ id: doc.id, ...doc.data() }));
+			setRecentAlerts(arr);
+		});
+
+		const qPred = query(collection(db, 'predictions'), orderBy('timestamp', 'desc'), limit(50));
+		const unsubPred = onSnapshot(qPred, (snapshot) => {
+			const arr = [];
+			snapshot.forEach(doc => arr.push({ id: doc.id, ...doc.data() }));
+			setHistoricalPredictions(arr);
+		});
+
+		return () => {
+			unsubAlerts();
+			unsubPred();
+		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
+
+	useEffect(() => {
+		if (!weather.city || weather.city === '--') return;
+		const regionPreds = historicalPredictions.filter(p => p.region && p.region.toUpperCase() === weather.city.toUpperCase());
+		if (regionPreds.length > 0) {
+			const arr = regionPreds.slice(0, 12).reverse().map(p => {
+				const timeStr = p.timestamp ? p.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '00:00';
+				return {
+					time: timeStr,
+					prob: p.riskScore,
+					rainfall: p.weatherSnapshot?.rainfall || 0
+				};
+			});
+			setTrendData(arr);
+		}
+	}, [historicalPredictions, weather.city]);
 
 	const inputStyle = {
 		width: '100%',
@@ -441,11 +523,36 @@ const DashboardView = () => {
 						</div>
 					</div>
 					
-					{prediction && (
+					{prediction && prediction.xai && (
 						<div className="pl-3 mt-2 border-t pt-4" style={{ borderColor: 'var(--grid-border)' }}>
 							<p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--text-primary)' }}>
-								<span className="font-semibold">AI Analysis:</span> {prediction.explanation}
+								<span className="font-semibold">AI Analysis:</span> {prediction.xai.primaryExplanation}
 							</p>
+							
+							<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+								<div className="flex flex-col gap-1.5 p-3 rounded-md" style={{ backgroundColor: 'var(--bg-base)' }}>
+									<span className="font-mono text-[10px] uppercase tracking-widest font-semibold" style={{ color: 'var(--text-secondary)' }}>Primary Driver</span>
+									<span className="text-xs font-bold" style={{ color: 'var(--status-danger)' }}>{prediction.xai.primaryDriver}</span>
+								</div>
+								<div className="flex flex-col gap-1.5 p-3 rounded-md" style={{ backgroundColor: 'var(--bg-base)' }}>
+									<span className="font-mono text-[10px] uppercase tracking-widest font-semibold" style={{ color: 'var(--text-secondary)' }}>Secondary Factors</span>
+									<span className="text-xs font-semibold" style={{ color: 'var(--status-warning)' }}>
+										{prediction.xai.secondaryFactors.length > 0 ? prediction.xai.secondaryFactors.join(', ') : 'None'}
+									</span>
+								</div>
+							</div>
+
+							{/* Limitations Panel */}
+							<div className="p-3 mb-4 rounded-md border" style={{ backgroundColor: 'var(--bg-surface-elevated)', borderColor: 'var(--grid-border)' }}>
+								<div className="flex items-center gap-2 mb-2">
+									<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" style={{ color: 'var(--text-secondary)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+									<span className="font-mono text-[10px] uppercase tracking-widest font-semibold" style={{ color: 'var(--text-secondary)' }}>Prediction Limitations</span>
+								</div>
+								<p className="font-mono text-[9px] leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
+									Current model computes risk using heuristic weights on live weather data (Rainfall, Humidity, Pressure, Wind, Clouds).<br/><br/>
+									Future pipeline integrations: River Water Level APIs, Soil Moisture sensors, DEM Analysis, and ensemble ML models.
+								</p>
+							</div>
 							
 							<div className="flex flex-col gap-1.5">
 								<span className="font-mono text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>Emergency Recommendations</span>
@@ -559,26 +666,27 @@ const DashboardView = () => {
 						</div>
 					</div>
 
-					{/* GIS Preview */}
-					<div className="rounded-xl border overflow-hidden flex flex-col" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)' }}>
+					{/* Recent Alerts */}
+					<div className="rounded-xl border flex flex-col" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)' }}>
 						<div className="flex justify-between items-center px-4 py-3 border-b" style={{ borderColor: 'var(--grid-border)' }}>
-							<h3 className="font-mono text-[10px] tracking-widest uppercase font-semibold" style={{ color: 'var(--text-secondary)' }}>GIS Preview</h3>
-							<Link to="/map" className="font-mono text-[10px] tracking-wide no-underline transition-all hover:underline" style={{ color: 'var(--accent-volt)', textDecoration: 'none' }}>OPEN MAP →</Link>
+							<h3 className="font-mono text-[10px] tracking-widest uppercase font-semibold" style={{ color: 'var(--text-secondary)' }}>Recent Alerts</h3>
+							<span className="font-mono text-[9px] px-2 py-0.5 rounded-md" style={{ backgroundColor: 'rgba(239,68,68,0.1)', color: 'var(--status-danger)' }}>{recentAlerts.length} Active</span>
 						</div>
-						<div className="flex-1 min-h-[220px] relative">
-							{/* Floating overlay labels — Zoom Earth style */}
-							<div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-md" style={{ backgroundColor: 'var(--bg-overlay)', backdropFilter: 'blur(8px)' }}>
-								<div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: 'var(--status-success)' }}></div>
-								<span className="font-mono text-[9px] font-semibold tracking-wider uppercase" style={{ color: 'var(--text-primary)' }}>LIVE</span>
-							</div>
-							<iframe 
-								title="Map Preview"
-								src={`/MAP/map61.html?maptiler=${process.env.REACT_APP_MAPTILER_API_KEY || ''}`} 
-								width="100%" 
-								height="100%" 
-								style={{ border: 0, display: 'block', position: 'absolute', inset: 0 }} 
-								className="pointer-events-none"
-							/>
+						<div className="flex-1 p-4 flex flex-col gap-3 overflow-y-auto max-h-[220px]">
+							{recentAlerts.length > 0 ? recentAlerts.map(alert => (
+								<div key={alert.id} className="p-3 rounded-md border" style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--grid-border)', borderLeft: `3px solid var(--status-danger)` }}>
+									<div className="flex justify-between items-center mb-1">
+										<span className="font-mono text-[9px] uppercase tracking-wider font-bold" style={{ color: 'var(--status-danger)' }}>{alert.severity} RISK</span>
+										<span className="font-mono text-[9px]" style={{ color: 'var(--text-tertiary)' }}>{alert.timestamp ? alert.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+									</div>
+									<p className="text-xs" style={{ color: 'var(--text-primary)' }}>{alert.message}</p>
+								</div>
+							)) : (
+								<div className="flex flex-col items-center justify-center h-full opacity-50">
+									<span className="text-xl mb-2">✅</span>
+									<span className="font-mono text-[10px] uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>No Active Alerts</span>
+								</div>
+							)}
 						</div>
 					</div>
 				</div>
@@ -689,22 +797,36 @@ const App = () => {
 			<Header
 				theme={theme}
 				toggleTheme={toggleTheme}
-				user={user}
+				user={userDoc ? { ...user, role: userDoc.role } : user}
 			/>
 
 			<div className="flex-1">
-				<Routes>
-					<Route path="/" element={<DashboardView />} />
-					<Route path="/report" element={<Reports />} />
-					<Route path="/funds/*" element={
-						<ProtectedRoute userDoc={userDoc} allowedRoles={['Citizen', 'Responder', 'RegionalAdmin', 'SuperAdmin']}>
-							<Fund />
-						</ProtectedRoute>
-					} />
-					<Route path="/map" element={<Map />} />
-					<Route path="/help" element={<Help />} />
-					<Route path="/profile" element={<Profile />} />
-				</Routes>
+				<Suspense fallback={
+					<div className="flex justify-center items-center h-full min-h-[50vh]">
+						<div className="flex items-center gap-3 font-mono text-sm" style={{ color: 'var(--text-secondary)' }}>
+							<svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+							Loading Module...
+						</div>
+					</div>
+				}>
+					<Routes>
+						<Route path="/" element={<DashboardView />} />
+						<Route path="/report" element={<Reports />} />
+						<Route path="/funds/*" element={
+							<ProtectedRoute userDoc={userDoc} allowedRoles={['Citizen', 'Responder', 'RegionalAdmin', 'SuperAdmin']}>
+								<Fund />
+							</ProtectedRoute>
+						} />
+						<Route path="/admin" element={
+							<ProtectedRoute userDoc={userDoc} allowedRoles={['RegionalAdmin', 'SuperAdmin']}>
+								<AdminAnalytics />
+							</ProtectedRoute>
+						} />
+						<Route path="/map" element={<Map />} />
+						<Route path="/help" element={<Help />} />
+						<Route path="/profile" element={<Profile />} />
+					</Routes>
+				</Suspense>
 			</div>
 
 			<Footer />
