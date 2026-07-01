@@ -9,28 +9,33 @@ import { calculateCloudScore } from '../utils/cloudScore';
 /**
  * Generates an explanation based on the top contributing risk factors.
  */
-const generateExplanation = (scores, finalScore) => {
+const generateXAI = (scores, finalScore, categoryLevel) => {
   if (finalScore < 20) {
-    return "Stable atmospheric conditions and minimal precipitation indicate a safe environment.";
-  }
-  
-  let explanation = "";
-  const highFactors = [];
-  
-  if (scores.rainfall * FACTOR_WEIGHTS.RAINFALL > 15) highFactors.push("heavy rainfall");
-  if (scores.pressure * FACTOR_WEIGHTS.PRESSURE > 10) highFactors.push("a low-pressure system");
-  if (scores.humidity * FACTOR_WEIGHTS.HUMIDITY > 10) highFactors.push("very high humidity");
-  if (scores.wind * FACTOR_WEIGHTS.WIND > 5) highFactors.push("strong winds");
-
-  if (highFactors.length > 0) {
-    explanation = `${highFactors.join(" combined with ")} significantly increases the flood risk in this region.`;
-    // Capitalize first letter
-    explanation = explanation.charAt(0).toUpperCase() + explanation.slice(1);
-  } else {
-    explanation = "Moderate environmental factors are contributing to an elevated flood risk.";
+    return {
+      primaryDriver: "None",
+      primaryExplanation: "Stable atmospheric conditions and minimal precipitation indicate a safe environment.",
+      secondaryFactors: []
+    };
   }
 
-  return explanation;
+  const contributions = [
+    { name: "Heavy Rainfall", value: scores.rainfall * FACTOR_WEIGHTS.RAINFALL, desc: "recent intense precipitation" },
+    { name: "Low Pressure", value: scores.pressure * FACTOR_WEIGHTS.PRESSURE, desc: "a cyclonic/low-pressure system" },
+    { name: "High Humidity", value: scores.humidity * FACTOR_WEIGHTS.HUMIDITY, desc: "highly saturated atmospheric moisture" },
+    { name: "Strong Winds", value: scores.wind * FACTOR_WEIGHTS.WIND, desc: "high wind speeds" },
+    { name: "Cloud Cover", value: scores.cloud * FACTOR_WEIGHTS.CLOUD, desc: "dense storm clouds" }
+  ];
+
+  contributions.sort((a, b) => b.value - a.value);
+
+  const primary = contributions[0];
+  const secondary = contributions.slice(1).filter(c => c.value > 5).map(c => c.name);
+
+  return {
+    primaryDriver: primary.name,
+    primaryExplanation: `${primary.name} (${primary.desc}) is the most significant factor driving the current ${categoryLevel} risk level.`,
+    secondaryFactors: secondary
+  };
 };
 
 /**
@@ -78,13 +83,15 @@ export const calculateFloodRisk = (weatherData) => {
 
   // Determine risk category
   const category = getRiskCategory(finalScore);
+  const xai = generateXAI(scores, finalScore, category.level);
 
   // Future inputs (e.g. riverLevel, soilMoisture) can be appended to factors and increase confidence
   return {
     score: finalScore,
     level: category.level,
     confidence: "65%", // Weather only
-    explanation: generateExplanation(scores, finalScore),
+    explanation: xai.primaryExplanation,
+    xai: xai,
     factors: {
       rainfall: rain1h || rain3h || 0,
       humidity,
