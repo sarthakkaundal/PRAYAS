@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db, auth } from './Auth/firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
+import { logAuditAction } from '../services/telemetryService';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 const Fund = () => {
@@ -85,6 +86,9 @@ const Fund = () => {
         createdAt: serverTimestamp(),
         createdBy: auth.currentUser.uid
       });
+      
+      logAuditAction(auth.currentUser.uid, userRole, 'FUND_INFLOW_REGISTERED', { source: inflowSource, type: inflowType, amount: Number(inflowAmount) });
+
       setInflowSource('');
       setInflowAmount('');
     } catch (err) {
@@ -103,6 +107,9 @@ const Fund = () => {
         createdAt: serverTimestamp(),
         createdBy: auth.currentUser.uid
       });
+      
+      logAuditAction(auth.currentUser.uid, userRole, 'FUND_OUTFLOW_REGISTERED', { region: outflowRegion, purpose: outflowPurpose, amount: Number(outflowAmount) });
+
       setOutflowRegion('');
       setOutflowPurpose('');
       setOutflowAmount('');
