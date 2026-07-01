@@ -207,9 +207,24 @@
 					target="_blank"
 					class="w-full bg-green-500 text-white font-semibold py-3 px-4 rounded-xl hover:bg-green-600 transition-colors flex items-center justify-center"
 				>
-					<i class="fas fa-plus-circle mr-2"></i> Register a New
-					Shelter
+					<i class="fas fa-plus-circle mr-2"></i> Register a New Shelter
 				</a>
+			</div>
+
+			<!-- Divider -->
+			<hr class="border-gray-200/80" />
+
+			<!-- Location Search -->
+			<div>
+				<h3 class="font-bold text-gray-800 text-xl mb-3">
+					Target Region
+				</h3>
+				<div class="flex gap-2">
+					<input type="text" id="region-search-input" placeholder="e.g. Mumbai, Assam" class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-blue-500" />
+					<button id="region-search-btn" class="bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
+						Search
+					</button>
+				</div>
 			</div>
 
 			<!-- Divider -->
@@ -1186,11 +1201,35 @@
 					updateLocationBasedData(e.latlng);
 				});
 				map.on('locationerror', () => {
-					showModal(
-						'Location Error',
-						'Could not find your location. Displaying features for default area.'
-					);
 					updateLocationBasedData(map.getCenter());
+				});
+
+				// Target Region Search Button Handler
+				document.getElementById('region-search-btn').onclick = async () => {
+					const city = document.getElementById('region-search-input').value.trim();
+					if (!city) return;
+					
+					showModal('Searching', `Locating ${city}...`, { isLoading: true });
+					try {
+						const apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${OPENWEATHER_API_KEY}&units=metric`;
+						const response = await fetch(apiUrl);
+						if (!response.ok) throw new Error('City not found');
+						const data = await response.json();
+						
+						const loc = L.latLng(data.coord.lat, data.coord.lon);
+						map.setView(loc, 13);
+						updateLocationBasedData(loc);
+						
+						document.getElementById('message-modal').classList.add('hidden');
+					} catch (err) {
+						showModal('Search Error', `Could not find region: ${city}`);
+					}
+				};
+
+				document.getElementById('region-search-input').addEventListener('keypress', function (e) {
+					if (e.key === 'Enter') {
+						document.getElementById('region-search-btn').click();
+					}
 				});
 
 				const searchControl = new GeoSearch.GeoSearchControl({
@@ -1205,6 +1244,11 @@
 				map.on('geosearch/showlocation', (result) => {
 					const loc = L.latLng(result.location.y, result.location.x);
 					updateLocationBasedData(loc);
+				});
+
+				// Allow user to click anywhere on the map to pin a new location
+				map.on('click', (e) => {
+					updateLocationBasedData(e.latlng);
 				});
 
 				const rainfallSlider =

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './Auth/firebase';
-import { collection, onSnapshot, query, orderBy, limit, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
+import { collection, onSnapshot, query, orderBy, limit, doc, updateDoc } from 'firebase/firestore';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 const AdminAnalytics = () => {
     const [activeTab, setActiveTab] = useState('dashboard');
@@ -12,7 +12,6 @@ const AdminAnalytics = () => {
         predictions: { total: 0, extreme: 0 }
     });
     
-    const [reportTrend, setReportTrend] = useState([]);
     const [usersList, setUsersList] = useState([]);
     const [auditLogs, setAuditLogs] = useState([]);
     const [reportsList, setReportsList] = useState([]);
@@ -52,7 +51,6 @@ const AdminAnalytics = () => {
         const unsubReports = onSnapshot(collection(db, 'reports'), (snapshot) => {
             if(!isMounted) return;
             let pending = 0, verified = 0, resolved = 0;
-            const trendMap = {};
             const repArr = [];
 
             snapshot.forEach(doc => {
@@ -61,18 +59,9 @@ const AdminAnalytics = () => {
                 if (data.status === 'pending') pending++;
                 else if (data.status === 'responding') verified++;
                 else if (data.status === 'resolved') resolved++;
-
-                // Build trend data by month
-                if (data.createdAt) {
-                    const date = data.createdAt.toDate();
-                    const month = date.toLocaleString('default', { month: 'short' });
-                    trendMap[month] = (trendMap[month] || 0) + 1;
-                }
             });
 
             setReportsList(repArr);
-            const trendArray = Object.keys(trendMap).map(k => ({ name: k, count: trendMap[k] }));
-            setReportTrend(trendArray.length > 0 ? trendArray : [{ name: 'Current', count: snapshot.size }]);
             setStats(s => ({ ...s, reports: { total: snapshot.size, pending, verified, resolved }}));
         }, (err) => console.error(err));
 
