@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db, auth } from './Auth/firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
+import { logAuditAction } from '../services/telemetryService';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -167,6 +168,9 @@ const Reports = () => {
         reportedBy: auth.currentUser?.uid || 'anonymous',
         createdAt: serverTimestamp()
       });
+      
+      logAuditAction(auth.currentUser?.uid, userRole, 'REPORT_SUBMITTED', { location: location.address, severity });
+
       setDescription('');
       setSeverity('Minor');
       setImage(null);
@@ -181,7 +185,16 @@ const Reports = () => {
   const updateStatus = async (id, newStatus) => {
     if (userRole === 'Citizen') return;
     try {
-      await updateDoc(doc(db, "reports", id), { status: newStatus });
+      const updateData = { status: newStatus };
+      if (newStatus === 'responding') {
+        updateData.verifiedBy = auth.currentUser?.uid || 'Unknown';
+        updateData.verifiedAt = serverTimestamp();
+      } else if (newStatus === 'resolved') {
+        updateData.resolvedBy = auth.currentUser?.uid || 'Unknown';
+        updateData.resolvedAt = serverTimestamp();
+      }
+      await updateDoc(doc(db, "reports", id), updateData);
+      logAuditAction(auth.currentUser?.uid, userRole, 'REPORT_STATUS_CHANGED', { reportId: id, newStatus });
     } catch (err) {
       console.error("Error updating status:", err);
     }
