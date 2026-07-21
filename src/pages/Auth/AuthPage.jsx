@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { auth, db } from "./firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import logo from "./LOGO.jpg"; 
+import { logAuditAction } from "../../services/telemetryService";
 
 export default function AuthPage({ setUserLoggedIn }) {
   const [activeTab, setActiveTab] = useState("login");
@@ -29,6 +30,7 @@ export default function AuthPage({ setUserLoggedIn }) {
       const user = userCredential.user;
       
       // Auto-migrate existing users from Realtime DB to Firestore
+      let userRole = "Citizen";
       try {
         const userDocRef = doc(db, "users", user.uid);
         const userDocSnap = await getDoc(userDocRef);
@@ -39,13 +41,20 @@ export default function AuthPage({ setUserLoggedIn }) {
             role: "Citizen",
             firstName: "Migrated",
             lastName: "User",
-            createdAt: new Date().toISOString(),
+            createdAt: serverTimestamp(),
+            lastLogin: serverTimestamp(),
+          });
+        } else {
+          userRole = userDocSnap.data().role || "Citizen";
+          await updateDoc(userDocRef, {
+            lastLogin: serverTimestamp()
           });
         }
       } catch (migrationErr) {
         console.error("Migration check failed:", migrationErr);
       }
 
+      logAuditAction(user.uid, userRole, 'USER_LOGIN', { email: user.email });
       setUserLoggedIn(true);
       setError("");
     } catch (err) {
@@ -69,6 +78,7 @@ export default function AuthPage({ setUserLoggedIn }) {
         role: "Citizen",
         createdAt: new Date().toISOString(),
       });
+      logAuditAction(user.uid, 'Citizen', 'USER_REGISTER', { email: user.email, firstName, lastName });
       setUserLoggedIn(true);
       setError("");
     } catch (err) {

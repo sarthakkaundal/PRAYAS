@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from './Auth/firebase';
-import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { logAuditAction } from '../services/telemetryService';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -19,6 +19,14 @@ const Fund = () => {
   const [outflowRegion, setOutflowRegion] = useState('');
   const [outflowPurpose, setOutflowPurpose] = useState('');
   const [outflowAmount, setOutflowAmount] = useState('');
+
+  // Fund Request state
+  const [fundRequests, setFundRequests] = useState([]);
+  const [reqTitle, setReqTitle] = useState('');
+  const [reqDescription, setReqDescription] = useState('');
+  const [reqAmount, setReqAmount] = useState('');
+  const [reqRegion, setReqRegion] = useState('');
+
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -45,6 +53,13 @@ const Fund = () => {
       const data = [];
       snapshot.forEach(d => data.push({ id: d.id, ...d.data() }));
       setOutflows(data);
+    });
+
+    const qReq = query(collection(db, "fund_requests"), orderBy("createdAt", "desc"));
+    const unsubscribeReq = onSnapshot(qReq, (snapshot) => {
+      const data = [];
+      snapshot.forEach(d => data.push({ id: d.id, ...d.data() }));
+      setFundRequests(data);
       setLoading(false);
     });
 
@@ -52,6 +67,7 @@ const Fund = () => {
       unsubscribeAuth();
       unsubscribeIn();
       unsubscribeOut();
+      unsubscribeReq();
     };
   }, []);
 
@@ -116,6 +132,70 @@ const Fund = () => {
     } catch (err) {
       console.error(err);
       alert("Failed to add outflow");
+    }
+  };
+
+  const handleAddRequest = async () => {
+    if (!reqTitle || !reqDescription || !reqAmount || !reqRegion) return alert("Please fill all fields");
+    try {
+      await addDoc(collection(db, "fund_requests"), {
+        title: reqTitle,
+        description: reqDescription,
+        amount: Number(reqAmount),
+        region: reqRegion,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        createdBy: auth.currentUser?.uid || 'anonymous'
+      });
+      
+      logAuditAction(auth.currentUser?.uid, userRole, 'FUND_REQUEST_SUBMITTED', { title: reqTitle, amount: Number(reqAmount) });
+
+      setReqTitle('');
+      setReqDescription('');
+      setReqAmount('');
+      setReqRegion('');
+      alert("Request submitted successfully!");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to submit request");
+    }
+  };
+
+  const handleApproveRequest = async (request) => {
+    try {
+      // 1. Mark as approved
+      await updateDoc(doc(db, "fund_requests", request.id), {
+        status: 'approved',
+        approvedAt: serverTimestamp(),
+        approvedBy: auth.currentUser.uid
+      });
+      // 2. Add to outflows automatically
+      await addDoc(collection(db, "fund_outflows"), {
+        region: request.region,
+        purpose: request.title,
+        amount: request.amount,
+        createdAt: serverTimestamp(),
+        createdBy: auth.currentUser.uid
+      });
+      
+      logAuditAction(auth.currentUser.uid, userRole, 'FUND_REQUEST_APPROVED', { requestId: request.id, amount: request.amount });
+    } catch (err) {
+      console.error(err);
+      alert("Failed to approve request");
+    }
+  };
+
+  const handleRejectRequest = async (requestId) => {
+    try {
+      await updateDoc(doc(db, "fund_requests", requestId), {
+        status: 'rejected',
+        rejectedAt: serverTimestamp(),
+        rejectedBy: auth.currentUser.uid
+      });
+      logAuditAction(auth.currentUser.uid, userRole, 'FUND_REQUEST_REJECTED', { requestId });
+    } catch (err) {
+      console.error(err);
+      alert("Failed to reject request");
     }
   };
 
@@ -286,6 +366,91 @@ const Fund = () => {
       </div>
 
       {/* Tables */}
+      <div className="opacity-0 animate-in grid grid-cols-1 gap-4" style={{ animationDelay: '0.12s' }}>
+        {/* Fund Requests Form & Table */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          
+          {/* Request Form */}
+          <div className="lg:col-span-1 rounded-xl border p-6" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)' }}>
+            <h2 className="text-sm font-semibold mb-5 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+              <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--accent-volt)' }}></div>
+              Submit Fund Request
+            </h2>
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="block font-mono text-[10px] mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Project / Title</label>
+                <input type="text" placeholder="e.g. Relief Camp Supplies" value={reqTitle} onChange={e => setReqTitle(e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label className="block font-mono text-[10px] mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Region</label>
+                <input type="text" placeholder="Target area" value={reqRegion} onChange={e => setReqRegion(e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label className="block font-mono text-[10px] mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Amount (INR)</label>
+                <input type="number" placeholder="0" value={reqAmount} onChange={e => setReqAmount(e.target.value)} style={{...inputStyle, fontSize: '18px'}} />
+              </div>
+              <div>
+                <label className="block font-mono text-[10px] mb-1.5 uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Description</label>
+                <textarea rows="3" placeholder="Explain the need..." value={reqDescription} onChange={e => setReqDescription(e.target.value)} style={{...inputStyle, resize: 'vertical'}} />
+              </div>
+              <button onClick={handleAddRequest} style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius-md)', border: 'none', backgroundColor: 'var(--accent-volt)', color: 'var(--text-inverse)', fontWeight: '600', fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit', marginTop: '4px' }}>Submit Request</button>
+            </div>
+          </div>
+
+          {/* Requests List */}
+          <div className="lg:col-span-2 rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)' }}>
+            <div className="px-5 py-3 border-b" style={{ borderColor: 'var(--grid-border)' }}>
+              <h2 className="font-mono text-[10px] tracking-widest uppercase font-semibold" style={{ color: 'var(--text-secondary)' }}>{isAdmin ? 'Pending Fund Requests (Admin)' : 'My Requests'}</h2>
+            </div>
+            <div className="overflow-x-auto h-[440px]">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--grid-border)', backgroundColor: 'var(--bg-surface-elevated)' }}>
+                    <th className="p-3 font-mono text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-tertiary)' }}>Details</th>
+                    <th className="p-3 font-mono text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-tertiary)' }}>Amount</th>
+                    <th className="p-3 font-mono text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-tertiary)' }}>Status</th>
+                    {isAdmin && <th className="p-3 font-mono text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-tertiary)' }}>Actions</th>}
+                  </tr>
+                </thead>
+                <tbody className="font-mono text-xs divide-y" style={{ borderColor: 'var(--grid-border)' }}>
+                  {fundRequests.filter(r => isAdmin ? r.status === 'pending' : r.createdBy === auth.currentUser?.uid).map((req) => (
+                    <tr key={req.id} className="transition-colors hover:bg-white/5">
+                      <td className="p-3">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{req.title}</span>
+                          <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>📍 {req.region} • {req.createdAt?.toDate ? req.createdAt.toDate().toLocaleDateString() : ''}</span>
+                        </div>
+                      </td>
+                      <td className="p-3 font-semibold" style={{ color: 'var(--accent-volt)' }}>₹{req.amount?.toLocaleString()}</td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-semibold border" style={{ 
+                          backgroundColor: req.status === 'approved' ? 'rgba(34,197,94,0.1)' : req.status === 'rejected' ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)', 
+                          color: req.status === 'approved' ? 'var(--status-success)' : req.status === 'rejected' ? 'var(--status-danger)' : 'var(--status-warning)',
+                          borderColor: 'var(--grid-border)' 
+                        }}>
+                          {req.status}
+                        </span>
+                      </td>
+                      {isAdmin && (
+                        <td className="p-3">
+                          <div className="flex gap-2">
+                            <button onClick={() => handleApproveRequest(req)} className="px-3 py-1 rounded bg-green-600/20 text-green-500 hover:bg-green-600/40 text-[10px] uppercase font-bold transition-colors">Approve</button>
+                            <button onClick={() => handleRejectRequest(req.id)} className="px-3 py-1 rounded bg-red-600/20 text-red-500 hover:bg-red-600/40 text-[10px] uppercase font-bold transition-colors">Reject</button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                  {fundRequests.filter(r => isAdmin ? r.status === 'pending' : r.createdBy === auth.currentUser?.uid).length === 0 && (
+                    <tr><td colSpan={isAdmin ? 4 : 3} className="p-8 text-center text-xs" style={{color: 'var(--text-tertiary)'}}>No requests found</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="opacity-0 animate-in grid grid-cols-1 lg:grid-cols-2 gap-4" style={{ animationDelay: '0.15s' }}>
         {/* Inflows */}
         <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)' }}>

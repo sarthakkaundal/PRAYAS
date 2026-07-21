@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './Auth/firebase';
-import { collection, onSnapshot, query, orderBy, limit, doc, updateDoc } from 'firebase/firestore';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { collection, onSnapshot, query, orderBy, limit, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar } from 'recharts';
+import { logAuditAction } from '../services/telemetryService';
 
 const AdminAnalytics = () => {
     const [activeTab, setActiveTab] = useState('dashboard');
     const [stats, setStats] = useState({
         users: { total: 0, citizens: 0, responders: 0, admins: 0 },
-        reports: { total: 0, pending: 0, verified: 0, resolved: 0 },
+        reports: { total: 0, pending: 0, verified: 0, resolved: 0, today: 0 },
         funds: { totalDeployed: 0, requests: 0 },
-        predictions: { total: 0, extreme: 0 }
+        predictions: { total: 0, extreme: 0, high: 0, medium: 0, low: 0, today: 0, avgRisk: 0, regionRisks: {} }
     });
     
     const [usersList, setUsersList] = useState([]);
@@ -20,11 +21,25 @@ const AdminAnalytics = () => {
     const [aiLogsList, setAiLogsList] = useState([]);
     const [sheltersList, setSheltersList] = useState([]);
     const [alertsList, setAlertsList] = useState([]);
+    const [historicalWeather, setHistoricalWeather] = useState([]);
     const [loading, setLoading] = useState(true);
 
     const [userSearch, setUserSearch] = useState('');
     const [userRoleFilter, setUserRoleFilter] = useState('All');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+    // Shelter Form State
+    const [showShelterModal, setShowShelterModal] = useState(false);
+    const [shelterForm, setShelterForm] = useState({ name: '', location: '', capacity: '', currentOccupancy: '', status: 'ACTIVE', resources: { food: 'OK', water: 'OK', meds: 'OK' }});
+
+    // Alert Form State
+    const [showAlertModal, setShowAlertModal] = useState(false);
+    const [alertForm, setAlertForm] = useState({ type: 'WEATHER_WARNING', severity: 'WARNING', region: '', message: '' });
+
+    // Details Modal State
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [selectedReportId, setSelectedReportId] = useState(null);
+
 
     useEffect(() => {
         let isMounted = true;
@@ -50,8 +65,10 @@ const AdminAnalytics = () => {
         // Fetch Reports
         const unsubReports = onSnapshot(collection(db, 'reports'), (snapshot) => {
             if(!isMounted) return;
-            let pending = 0, verified = 0, resolved = 0;
+            let pending = 0, verified = 0, resolved = 0, today = 0;
             const repArr = [];
+            const startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
 
             snapshot.forEach(doc => {
                 const data = doc.data();
@@ -59,10 +76,14 @@ const AdminAnalytics = () => {
                 if (data.status === 'pending') pending++;
                 else if (data.status === 'responding') verified++;
                 else if (data.status === 'resolved') resolved++;
+                
+                if (data.createdAt && data.createdAt.toMillis) {
+                    if (data.createdAt.toMillis() >= startOfToday.getTime()) today++;
+                }
             });
 
             setReportsList(repArr);
-            setStats(s => ({ ...s, reports: { total: snapshot.size, pending, verified, resolved }}));
+            setStats(s => ({ ...s, reports: { total: snapshot.size, pending, verified, resolved, today }}));
         }, (err) => console.error(err));
 
         // Fetch Funds
@@ -82,19 +103,38 @@ const AdminAnalytics = () => {
         // Fetch Predictions
         const unsubPredictions = onSnapshot(collection(db, 'predictions'), (snapshot) => {
             if(!isMounted) return;
-            let extreme = 0;
+            let extreme = 0, high = 0, medium = 0, low = 0, today = 0, totalRisk = 0, countWithScore = 0;
             const predArr = [];
+            const startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
+            const regionRisks = {};
+
             snapshot.forEach(doc => {
                 const data = doc.data();
                 predArr.push({ id: doc.id, ...data });
                 if (data.riskLevel === 'EXTREME') extreme++;
+                else if (data.riskLevel === 'HIGH') high++;
+                else if (data.riskLevel === 'MEDIUM') medium++;
+                else if (data.riskLevel === 'LOW') low++;
+                
+                if (data.timestamp && data.timestamp.toMillis) {
+                    if (data.timestamp.toMillis() >= startOfToday.getTime()) today++;
+                }
+                if (typeof data.riskScore === 'number') {
+                    totalRisk += data.riskScore;
+                    countWithScore++;
+                    if (!regionRisks[data.region]) regionRisks[data.region] = [];
+                    regionRisks[data.region].push(data.riskScore);
+                }
             });
             predArr.sort((a, b) => {
                 if (a.timestamp && b.timestamp) return b.timestamp.seconds - a.timestamp.seconds;
                 return 0;
             });
             setPredictionsList(predArr);
-            setStats(s => ({ ...s, predictions: { total: snapshot.size, extreme }}));
+            
+            const avgRisk = countWithScore > 0 ? (totalRisk / countWithScore).toFixed(1) : 0;
+            setStats(s => ({ ...s, predictions: { total: snapshot.size, extreme, high, medium, low, today, avgRisk, regionRisks }}));
             setLoading(false);
         }, (err) => {
             console.error("Predictions fetch error:", err);
@@ -165,12 +205,65 @@ const AdminAnalytics = () => {
         };
     }, []);
 
+    const fetchHistoricalWeather = async (lat, lon) => {
+        try {
+            // Using Open-Meteo archive API for past 14 days
+            const end = new Date();
+            const start = new Date();
+            start.setDate(end.getDate() - 14);
+            const endDateStr = end.toISOString().split('T')[0];
+            const startDateStr = start.toISOString().split('T')[0];
+            const res = await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startDateStr}&end_date=${endDateStr}&daily=precipitation_sum,temperature_2m_max&timezone=auto`);
+            const data = await res.json();
+            
+            if (data && data.daily) {
+                const formatted = data.daily.time.map((time, idx) => ({
+                    date: time,
+                    rainfall: data.daily.precipitation_sum[idx],
+                    tempMax: data.daily.temperature_2m_max[idx]
+                }));
+                setHistoricalWeather(formatted);
+            }
+        } catch (err) {
+            console.error("Failed to fetch historical weather:", err);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'historical') {
+            // Defaulting to a central region (e.g. New Delhi) or use browser location
+            fetchHistoricalWeather(28.6139, 77.2090);
+        }
+    }, [activeTab]);
+
     const handleRoleChange = async (userId, newRole) => {
         try {
             await updateDoc(doc(db, 'users', userId), { role: newRole });
+            logAuditAction('admin', 'Admin', 'ROLE_CHANGE', { targetUserId: userId, newRole });
         } catch (error) {
             console.error("Error updating role:", error);
             alert("Failed to update user role.");
+        }
+    };
+
+    const handleDeleteUser = async (userId) => {
+        if (window.confirm("Are you sure you want to permanently delete this user?")) {
+            try {
+                await deleteDoc(doc(db, 'users', userId));
+            } catch (err) {
+                console.error("Error deleting user:", err);
+                alert("Failed to delete user.");
+            }
+        }
+    };
+
+    const handleUpdateOccupancy = async (id, currentOcc, delta) => {
+        try {
+            const newOcc = Math.max(0, currentOcc + delta);
+            await updateDoc(doc(db, 'shelters', id), { currentOccupancy: newOcc });
+            logAuditAction('admin', 'Admin', 'UPDATE_SHELTER', { shelterId: id, oldOccupancy: currentOcc, newOccupancy: newOcc });
+        } catch (err) {
+            console.error("Error updating occupancy:", err);
         }
     };
 
@@ -188,6 +281,12 @@ const AdminAnalytics = () => {
         } else if (type === 'audit') {
             dataToExport = auditLogs;
             headers = ['ID', 'Action', 'UserId', 'Role', 'Details'];
+        } else if (type === 'predictions') {
+            dataToExport = predictionsList;
+            headers = ['ID', 'Region', 'RiskLevel', 'Confidence', 'Timestamp'];
+        } else if (type === 'funds') {
+            dataToExport = fundsList;
+            headers = ['ID', 'TransactionId', 'Amount', 'Purpose', 'Status', 'ApprovedBy'];
         }
 
         if (dataToExport.length === 0) return alert("No data to export!");
@@ -224,6 +323,13 @@ const AdminAnalytics = () => {
         { name: 'Responding', value: stats.reports.verified },
         { name: 'Resolved', value: stats.reports.resolved }
     ];
+    const predictionPieData = [
+        { name: 'Low', value: stats.predictions.low },
+        { name: 'Medium', value: stats.predictions.medium },
+        { name: 'High', value: stats.predictions.high },
+        { name: 'Extreme', value: stats.predictions.extreme }
+    ];
+    const PREDICTION_COLORS = ['#22c55e', '#eab308', '#f97316', '#ef4444'];
     const healthServices = [
         { name: 'Firebase Backend', status: 'ONLINE', ping: '12ms', color: 'var(--status-success)' },
         { name: 'Weather API', status: 'ONLINE', ping: '45ms', color: 'var(--status-success)' },
@@ -260,6 +366,56 @@ const AdminAnalytics = () => {
         );
     }
 
+    const handleAddShelter = async () => {
+        if (!shelterForm.name || !shelterForm.location) return alert("Name and location required");
+        try {
+            const docRef = await addDoc(collection(db, "shelters"), {
+                ...shelterForm,
+                capacity: Number(shelterForm.capacity) || 0,
+                currentOccupancy: Number(shelterForm.currentOccupancy) || 0,
+                createdAt: serverTimestamp()
+            });
+            logAuditAction('admin', 'Admin', 'ADD_SHELTER', { shelterId: docRef.id, name: shelterForm.name });
+            setShowShelterModal(false);
+            setShelterForm({ name: '', location: '', capacity: '', currentOccupancy: '', status: 'ACTIVE', resources: { food: 'OK', water: 'OK', meds: 'OK' }});
+        } catch (err) {
+            console.error(err);
+            alert("Failed to add shelter");
+        }
+    };
+
+    const handleDeleteShelter = async (id) => {
+        if(window.confirm("Delete this shelter?")) {
+            await deleteDoc(doc(db, "shelters", id));
+        }
+    };
+
+    const handleAddAlert = async () => {
+        if (!alertForm.message) return alert("Message required");
+        try {
+            await addDoc(collection(db, "alerts"), {
+                ...alertForm,
+                status: 'ACTIVE',
+                timestamp: serverTimestamp()
+            });
+            setShowAlertModal(false);
+            setAlertForm({ type: 'WEATHER_WARNING', severity: 'WARNING', region: '', message: '' });
+        } catch (err) {
+            console.error(err);
+            alert("Failed to create alert");
+        }
+    };
+
+    const handleDeactivateAlert = async (id) => {
+        await updateDoc(doc(db, "alerts", id), { status: 'EXPIRED' });
+    };
+
+    const handleDeleteAlert = async (id) => {
+        if(window.confirm("Delete this alert?")) {
+            await deleteDoc(doc(db, "alerts", id));
+        }
+    };
+
     return (
         <div className="flex flex-col md:flex-row min-h-[calc(100vh-64px)] w-full">
             {/* Sidebar */}
@@ -295,6 +451,7 @@ const AdminAnalytics = () => {
                     { id: 'audit', label: 'Audit Logs (Timeline)', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
                     { id: 'shelters', label: 'Active Shelters', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
                     { id: 'alerts', label: 'Emergency Alerts', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
+                    { id: 'historical', label: 'Historical Analytics', icon: 'M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z' },
                     { id: 'export', label: 'Data Export', icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4' }
                 ].map(tab => (
                     <button
@@ -336,16 +493,16 @@ const AdminAnalytics = () => {
                                 <span className="text-3xl font-bold block" style={{ color: 'var(--text-primary)' }}>{stats.users.total}</span>
                             </div>
                             <div className="rounded-xl p-5 border" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)' }}>
-                                <span className="font-mono text-[10px] uppercase tracking-wider block mb-2" style={{ color: 'var(--text-secondary)' }}>Total Reports</span>
-                                <span className="text-3xl font-bold block" style={{ color: 'var(--status-warning)' }}>{stats.reports.total}</span>
+                                <span className="font-mono text-[10px] uppercase tracking-wider block mb-2" style={{ color: 'var(--text-secondary)' }}>Reports Today (Total: {stats.reports.total})</span>
+                                <span className="text-3xl font-bold block" style={{ color: 'var(--status-warning)' }}>{stats.reports.today}</span>
                             </div>
                             <div className="rounded-xl p-5 border" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)' }}>
-                                <span className="font-mono text-[10px] uppercase tracking-wider block mb-2" style={{ color: 'var(--text-secondary)' }}>Funds Deployed</span>
-                                <span className="text-3xl font-bold block" style={{ color: 'var(--accent-volt)' }}>₹{(stats.funds.totalDeployed / 1000000).toFixed(2)}M</span>
+                                <span className="font-mono text-[10px] uppercase tracking-wider block mb-2" style={{ color: 'var(--text-secondary)' }}>Avg Risk Score</span>
+                                <span className="text-3xl font-bold block" style={{ color: 'var(--accent-volt)' }}>{stats.predictions.avgRisk}</span>
                             </div>
                             <div className="rounded-xl p-5 border" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)' }}>
-                                <span className="font-mono text-[10px] uppercase tracking-wider block mb-2" style={{ color: 'var(--text-secondary)' }}>Predictions Run</span>
-                                <span className="text-3xl font-bold block" style={{ color: 'var(--text-primary)' }}>{stats.predictions.total}</span>
+                                <span className="font-mono text-[10px] uppercase tracking-wider block mb-2" style={{ color: 'var(--text-secondary)' }}>Predictions Today (Total: {stats.predictions.total})</span>
+                                <span className="text-3xl font-bold block" style={{ color: 'var(--text-primary)' }}>{stats.predictions.today}</span>
                             </div>
                         </div>
 
@@ -474,24 +631,41 @@ const AdminAnalytics = () => {
                                                     </span>
                                                 </td>
                                                 <td className="p-3">
-                                                    <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-semibold border" style={{ backgroundColor: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.2)', color: 'var(--status-success)' }}>
-                                                        Active
+                                                    <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-semibold border" style={{ backgroundColor: u.role === 'Disabled' ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)', borderColor: u.role === 'Disabled' ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)', color: u.role === 'Disabled' ? 'var(--status-danger)' : 'var(--status-success)' }}>
+                                                        {u.role === 'Disabled' ? 'Disabled' : 'Active'}
                                                     </span>
                                                 </td>
                                                 <td className="p-3 text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
                                                     {u.createdAt ? (u.createdAt.toDate ? u.createdAt.toDate().toLocaleDateString() : u.createdAt) : '--'}
                                                 </td>
                                                 <td className="p-3">
-                                                    <select 
-                                                        value={u.role || 'Citizen'}
-                                                        onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                                                        style={{...inputStyle, padding: '4px 8px', fontSize: '11px', width: 'auto'}}
-                                                    >
-                                                        <option value="Citizen">Citizen</option>
-                                                        <option value="Responder">Responder</option>
-                                                        <option value="RegionalAdmin">Regional Admin</option>
-                                                        <option value="SuperAdmin">Super Admin</option>
-                                                    </select>
+                                                    <div className="flex items-center gap-2">
+                                                        <select 
+                                                            value={u.role || 'Citizen'}
+                                                            onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                                                            style={{...inputStyle, padding: '4px 8px', fontSize: '11px', width: 'auto'}}
+                                                        >
+                                                            <option value="Citizen">Citizen</option>
+                                                            <option value="Responder">Responder</option>
+                                                            <option value="RegionalAdmin">Regional Admin</option>
+                                                            <option value="SuperAdmin">Super Admin</option>
+                                                            <option value="Disabled">Disabled</option>
+                                                        </select>
+                                                        <button 
+                                                            onClick={() => setSelectedUser(u)}
+                                                            className="p-1 rounded text-blue-500 hover:bg-blue-500/10 transition-colors"
+                                                            title="View Details"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleDeleteUser(u.id)}
+                                                            className="p-1 rounded text-red-500 hover:bg-red-500/10 transition-colors"
+                                                            title="Delete User"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         )) : (
@@ -568,6 +742,12 @@ const AdminAnalytics = () => {
                                                             </div>
                                                         )}
                                                     </div>
+                                                    <button 
+                                                        onClick={() => setSelectedReportId(r.id)}
+                                                        className="mt-3 text-[10px] font-mono tracking-wider font-semibold underline text-blue-500 hover:text-blue-400 transition-colors"
+                                                    >
+                                                        VIEW FULL HISTORY
+                                                    </button>
                                                 </td>
                                             </tr>
                                         )) : (
@@ -647,7 +827,46 @@ const AdminAnalytics = () => {
                                 <h1 className="text-2xl font-bold tracking-tight mb-0.5" style={{ color: 'var(--text-primary)' }}>Prediction Analytics</h1>
                                 <p className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>AI-driven crisis predictions and confidence scores.</p>
                             </div>
-                            <div className="overflow-x-auto rounded-lg border mt-2" style={{ borderColor: 'var(--grid-border)' }}>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                                <div className="rounded-xl border flex flex-col" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)' }}>
+                                    <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--grid-border)' }}>
+                                        <h3 className="font-mono text-[10px] tracking-widest uppercase font-semibold" style={{ color: 'var(--text-secondary)' }}>Risk Distribution</h3>
+                                    </div>
+                                    <div className="h-[220px] w-full p-4">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie data={predictionPieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={5} dataKey="value" stroke="none">
+                                                    {predictionPieData.map((entry, index) => <Cell key={`cell-${index}`} fill={PREDICTION_COLORS[index % PREDICTION_COLORS.length]} />)}
+                                                </Pie>
+                                                <Tooltip contentStyle={{ backgroundColor: 'var(--bg-surface-elevated)', border: '1px solid var(--grid-border)', borderRadius: '8px', fontSize: '11px', fontFamily: 'JetBrains Mono' }} itemStyle={{ color: 'var(--text-primary)' }} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                                <div className="rounded-xl border flex flex-col" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)' }}>
+                                    <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--grid-border)' }}>
+                                        <h3 className="font-mono text-[10px] tracking-widest uppercase font-semibold" style={{ color: 'var(--text-secondary)' }}>High Risk Regions</h3>
+                                    </div>
+                                    <div className="h-[220px] w-full p-4 overflow-y-auto">
+                                        <div className="flex flex-col gap-2">
+                                            {Object.keys(stats.predictions.regionRisks).map(region => {
+                                                const scores = stats.predictions.regionRisks[region];
+                                                const avg = scores.reduce((a,b)=>a+b,0) / scores.length;
+                                                return { region, avg };
+                                            }).sort((a,b)=>b.avg - a.avg).slice(0, 5).map((item, idx) => (
+                                                <div key={idx} className="flex justify-between items-center p-3 rounded" style={{ backgroundColor: 'var(--bg-surface-elevated)' }}>
+                                                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{item.region}</span>
+                                                    <span className="text-xs font-mono font-bold" style={{ color: item.avg > 75 ? 'var(--status-danger)' : item.avg > 50 ? 'var(--status-warning)' : 'var(--text-secondary)' }}>{item.avg.toFixed(1)}</span>
+                                                </div>
+                                            ))}
+                                            {Object.keys(stats.predictions.regionRisks).length === 0 && (
+                                                <div className="text-center text-xs font-mono py-8" style={{ color: 'var(--text-tertiary)' }}>No data available</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="overflow-x-auto rounded-lg border mt-4" style={{ borderColor: 'var(--grid-border)' }}>
                                 <table className="w-full text-left border-collapse" style={{ minWidth: '800px' }}>
                                     <thead style={{ backgroundColor: 'var(--bg-surface-elevated)', borderBottom: '1px solid var(--grid-border)' }}>
                                         <tr>
@@ -799,9 +1018,14 @@ const AdminAnalytics = () => {
                 {activeTab === 'shelters' && (
                     <div className="flex flex-col gap-6 max-w-7xl mx-auto w-full pb-20 animate-in fade-in duration-300">
                         <div className="rounded-xl p-5 border flex flex-col gap-4" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)' }}>
-                            <div>
-                                <h1 className="text-2xl font-bold tracking-tight mb-0.5" style={{ color: 'var(--text-primary)' }}>Active Shelters</h1>
-                                <p className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>Manage relief centers and monitor capacity and resources.</p>
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h1 className="text-2xl font-bold tracking-tight mb-0.5" style={{ color: 'var(--text-primary)' }}>Active Shelters</h1>
+                                    <p className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>Manage relief centers and monitor capacity and resources.</p>
+                                </div>
+                                <button onClick={() => setShowShelterModal(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-lg">
+                                    + Register New Shelter
+                                </button>
                             </div>
                             <div className="overflow-x-auto rounded-lg border mt-2" style={{ borderColor: 'var(--grid-border)' }}>
                                 <table className="w-full text-left border-collapse" style={{ minWidth: '800px' }}>
@@ -811,6 +1035,7 @@ const AdminAnalytics = () => {
                                             <th className="p-3 text-xs font-mono font-semibold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Capacity & Occupancy</th>
                                             <th className="p-3 text-xs font-mono font-semibold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Resources Status</th>
                                             <th className="p-3 text-xs font-mono font-semibold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Status</th>
+                                            <th className="p-3 text-xs font-mono font-semibold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y" style={{ borderColor: 'var(--grid-border)' }}>
@@ -827,8 +1052,12 @@ const AdminAnalytics = () => {
                                                 <td className="p-3">
                                                     <div className="flex flex-col gap-1 w-full max-w-[150px]">
                                                         <div className="flex justify-between items-center text-[10px] font-mono" style={{ color: 'var(--text-secondary)' }}>
-                                                            <span>{s.currentOccupancy || 0}</span>
-                                                            <span>{s.capacity || 100}</span>
+                                                            <div className="flex items-center gap-1">
+                                                                <button onClick={() => handleUpdateOccupancy(s.id, s.currentOccupancy || 0, -5)} className="px-1.5 rounded bg-gray-700 hover:bg-gray-600 text-white transition-colors">-</button>
+                                                                <span className="font-bold w-6 text-center">{s.currentOccupancy || 0}</span>
+                                                                <button onClick={() => handleUpdateOccupancy(s.id, s.currentOccupancy || 0, 5)} className="px-1.5 rounded bg-gray-700 hover:bg-gray-600 text-white transition-colors">+</button>
+                                                            </div>
+                                                            <span>/ {s.capacity || 100}</span>
                                                         </div>
                                                         <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
                                                             <div className="h-full rounded-full" style={{ width: `${Math.min(occupancyPercent, 100)}%`, backgroundColor: occupancyPercent >= 90 ? 'var(--status-danger)' : occupancyPercent >= 75 ? 'var(--status-warning)' : 'var(--status-success)' }}></div>
@@ -846,6 +1075,9 @@ const AdminAnalytics = () => {
                                                     <span className="px-2 py-0.5 rounded text-[9px] font-mono font-semibold border" style={{ backgroundColor: 'var(--bg-surface-elevated)', color: s.status === 'ACTIVE' ? 'var(--status-success)' : 'var(--status-warning)', borderColor: 'var(--grid-border)' }}>
                                                         {s.status || 'ACTIVE'}
                                                     </span>
+                                                </td>
+                                                <td className="p-3">
+                                                    <button onClick={() => handleDeleteShelter(s.id)} className="px-2 py-1 rounded bg-red-600/20 text-red-500 hover:bg-red-600/40 text-[10px] uppercase font-bold transition-colors">Delete</button>
                                                 </td>
                                             </tr>
                                         )}) : (
@@ -868,7 +1100,10 @@ const AdminAnalytics = () => {
                                 <p className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>Monitor and broadcast emergency warnings to specific regions.</p>
                             </div>
                             <div className="flex justify-end">
-                                <button className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-lg">
+                                <button 
+                                    onClick={() => setShowAlertModal(true)} 
+                                    style={{ padding: '8px 16px', backgroundColor: 'var(--status-danger)', color: '#ffffff', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', border: 'none', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                                >
                                     + Broadcast New Alert
                                 </button>
                             </div>
@@ -880,6 +1115,7 @@ const AdminAnalytics = () => {
                                             <th className="p-3 text-xs font-mono font-semibold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Type / Severity</th>
                                             <th className="p-3 text-xs font-mono font-semibold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Broadcast Region</th>
                                             <th className="p-3 text-xs font-mono font-semibold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Status</th>
+                                            <th className="p-3 text-xs font-mono font-semibold tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y" style={{ borderColor: 'var(--grid-border)' }}>
@@ -908,6 +1144,12 @@ const AdminAnalytics = () => {
                                                     <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-semibold border" style={{ backgroundColor: a.status === 'ACTIVE' ? 'rgba(239,68,68,0.1)' : 'var(--bg-surface-elevated)', borderColor: a.status === 'ACTIVE' ? 'rgba(239,68,68,0.2)' : 'var(--grid-border)', color: a.status === 'ACTIVE' ? 'var(--status-danger)' : 'var(--text-secondary)' }}>
                                                         {a.status || 'EXPIRED'}
                                                     </span>
+                                                </td>
+                                                <td className="p-3">
+                                                    <div className="flex gap-2">
+                                                        {a.status === 'ACTIVE' && <button onClick={() => handleDeactivateAlert(a.id)} className="px-2 py-1 rounded bg-yellow-600/20 text-yellow-500 hover:bg-yellow-600/40 text-[10px] uppercase font-bold transition-colors">Deactivate</button>}
+                                                        <button onClick={() => handleDeleteAlert(a.id)} className="px-2 py-1 rounded bg-red-600/20 text-red-500 hover:bg-red-600/40 text-[10px] uppercase font-bold transition-colors">Delete</button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         )) : (
@@ -940,6 +1182,32 @@ const AdminAnalytics = () => {
                                         <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Export {usersList.length} registered users.</p>
                                     </div>
                                     <button onClick={() => handleExport('users')} className="mt-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold uppercase tracking-wider transition-colors w-full text-center cursor-pointer">
+                                        Download CSV
+                                    </button>
+                                </div>
+                                
+                                <div className="rounded-lg border p-5 flex flex-col gap-4 transition-all hover:-translate-y-1" style={{ backgroundColor: 'var(--bg-surface-elevated)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)' }}>
+                                    <div className="w-10 h-10 rounded bg-green-500 bg-opacity-10 flex items-center justify-center text-green-500">
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Predictions Export</h3>
+                                        <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Export {predictionsList.length} AI risk predictions.</p>
+                                    </div>
+                                    <button onClick={() => handleExport('predictions')} className="mt-auto px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-bold uppercase tracking-wider transition-colors w-full text-center cursor-pointer">
+                                        Download CSV
+                                    </button>
+                                </div>
+
+                                <div className="rounded-lg border p-5 flex flex-col gap-4 transition-all hover:-translate-y-1" style={{ backgroundColor: 'var(--bg-surface-elevated)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)' }}>
+                                    <div className="w-10 h-10 rounded bg-purple-500 bg-opacity-10 flex items-center justify-center text-purple-500">
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Funds Export</h3>
+                                        <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Export {fundsList.length} fund transactions.</p>
+                                    </div>
+                                    <button onClick={() => handleExport('funds')} className="mt-auto px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-bold uppercase tracking-wider transition-colors w-full text-center cursor-pointer">
                                         Download CSV
                                     </button>
                                 </div>
@@ -1017,6 +1285,146 @@ const AdminAnalytics = () => {
                                         )}
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'historical' && (
+                    <div className="flex flex-col gap-6 max-w-7xl mx-auto w-full pb-20 animate-in fade-in duration-300">
+                        <div className="rounded-xl p-5 border flex flex-col gap-4" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)' }}>
+                            <div>
+                                <h1 className="text-2xl font-bold tracking-tight mb-0.5" style={{ color: 'var(--text-primary)' }}>Historical Analytics</h1>
+                                <p className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>14-Day Open-Meteo Weather Trend (Rainfall & Temperature)</p>
+                            </div>
+                            
+                            {historicalWeather.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                                    <div className="rounded-xl border p-4 flex flex-col" style={{ backgroundColor: 'var(--bg-surface-elevated)', borderColor: 'var(--grid-border)' }}>
+                                        <h3 className="font-mono text-[10px] tracking-widest uppercase font-semibold mb-4" style={{ color: 'var(--text-secondary)' }}>Precipitation Trend (mm)</h3>
+                                        <div style={{ height: '250px', width: '100%' }}>
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <LineChart data={historicalWeather} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                                                    <Line type="monotone" dataKey="rainfall" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 0 }} />
+                                                    <CartesianGrid stroke="#333" strokeDasharray="3 3" vertical={false} />
+                                                    <XAxis dataKey="date" stroke="var(--text-tertiary)" tick={{ fill: 'var(--text-tertiary)', fontSize: 10, fontFamily: 'JetBrains Mono' }} tickFormatter={(val) => val.split('-').slice(1).join('/')} />
+                                                    <YAxis stroke="var(--text-tertiary)" tick={{ fill: 'var(--text-tertiary)', fontSize: 10, fontFamily: 'JetBrains Mono' }} />
+                                                    <Tooltip contentStyle={{ backgroundColor: '#111', border: '1px solid var(--grid-border)', borderRadius: '8px', fontSize: '11px', fontFamily: 'JetBrains Mono' }} itemStyle={{ color: '#3b82f6' }} />
+                                                </LineChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+                                    <div className="rounded-xl border p-4 flex flex-col" style={{ backgroundColor: 'var(--bg-surface-elevated)', borderColor: 'var(--grid-border)' }}>
+                                        <h3 className="font-mono text-[10px] tracking-widest uppercase font-semibold mb-4" style={{ color: 'var(--text-secondary)' }}>Max Temperature Trend (°C)</h3>
+                                        <div style={{ height: '250px', width: '100%' }}>
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={historicalWeather} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                                                    <Bar dataKey="tempMax" fill="#f97316" radius={[4, 4, 0, 0]} />
+                                                    <CartesianGrid stroke="#333" strokeDasharray="3 3" vertical={false} />
+                                                    <XAxis dataKey="date" stroke="var(--text-tertiary)" tick={{ fill: 'var(--text-tertiary)', fontSize: 10, fontFamily: 'JetBrains Mono' }} tickFormatter={(val) => val.split('-').slice(1).join('/')} />
+                                                    <YAxis stroke="var(--text-tertiary)" tick={{ fill: 'var(--text-tertiary)', fontSize: 10, fontFamily: 'JetBrains Mono' }} />
+                                                    <Tooltip contentStyle={{ backgroundColor: '#111', border: '1px solid var(--grid-border)', borderRadius: '8px', fontSize: '11px', fontFamily: 'JetBrains Mono' }} itemStyle={{ color: '#f97316' }} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="p-12 text-center border rounded-xl" style={{ borderColor: 'var(--grid-border)' }}>
+                                    <span className="font-mono text-sm" style={{ color: 'var(--text-tertiary)' }}>Loading historical data from Open-Meteo API...</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Modals */}
+                {showShelterModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+                        <div className="bg-[#111] p-6 rounded-xl border border-gray-800 w-full max-w-md shadow-2xl">
+                            <h2 className="text-xl font-bold mb-4 text-white">Register New Shelter</h2>
+                            <div className="flex flex-col gap-3">
+                                <input type="text" placeholder="Shelter Name" className="w-full p-2 rounded bg-gray-900 border border-gray-700 text-white font-mono text-sm" value={shelterForm.name} onChange={e => setShelterForm({...shelterForm, name: e.target.value})} />
+                                <input type="text" placeholder="Location / Region" className="w-full p-2 rounded bg-gray-900 border border-gray-700 text-white font-mono text-sm" value={shelterForm.location} onChange={e => setShelterForm({...shelterForm, location: e.target.value})} />
+                                <div className="flex gap-2">
+                                    <input type="number" placeholder="Capacity" className="w-1/2 p-2 rounded bg-gray-900 border border-gray-700 text-white font-mono text-sm" value={shelterForm.capacity} onChange={e => setShelterForm({...shelterForm, capacity: e.target.value})} />
+                                    <input type="number" placeholder="Occupancy" className="w-1/2 p-2 rounded bg-gray-900 border border-gray-700 text-white font-mono text-sm" value={shelterForm.currentOccupancy} onChange={e => setShelterForm({...shelterForm, currentOccupancy: e.target.value})} />
+                                </div>
+                                <select className="w-full p-2 rounded bg-gray-900 border border-gray-700 text-white font-mono text-sm" value={shelterForm.status} onChange={e => setShelterForm({...shelterForm, status: e.target.value})}>
+                                    <option value="ACTIVE">ACTIVE</option>
+                                    <option value="FULL">FULL</option>
+                                    <option value="MAINTENANCE">MAINTENANCE</option>
+                                </select>
+                                <div className="flex justify-end gap-2 mt-4">
+                                    <button onClick={() => setShowShelterModal(false)} className="px-4 py-2 rounded text-sm text-gray-400 hover:text-white transition-colors">Cancel</button>
+                                    <button onClick={handleAddShelter} className="px-4 py-2 rounded text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors">Add Shelter</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {showAlertModal && (
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0, 0, 0, 0.65)', backdropFilter: 'blur(8px)' }}>
+                        <div style={{ backgroundColor: 'var(--bg-surface)', padding: '2rem', borderRadius: '12px', border: '1px solid var(--grid-border)', width: '100%', maxWidth: '450px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
+                            <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1.5rem', color: 'var(--text-primary)' }}>Broadcast New Alert</h2>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <div style={{ display: 'flex', gap: '1rem' }}>
+                                    <select style={{ width: '50%', padding: '0.75rem', borderRadius: '6px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--grid-border)', color: 'var(--text-primary)', fontFamily: '"JetBrains Mono", monospace', fontSize: '12px' }} value={alertForm.type} onChange={e => setAlertForm({...alertForm, type: e.target.value})}>
+                                        <option value="WEATHER_WARNING">Weather Warning</option>
+                                        <option value="EVACUATION">Evacuation</option>
+                                        <option value="MEDICAL">Medical</option>
+                                    </select>
+                                    <select style={{ width: '50%', padding: '0.75rem', borderRadius: '6px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--grid-border)', color: 'var(--text-primary)', fontFamily: '"JetBrains Mono", monospace', fontSize: '12px' }} value={alertForm.severity} onChange={e => setAlertForm({...alertForm, severity: e.target.value})}>
+                                        <option value="INFO">INFO</option>
+                                        <option value="WARNING">WARNING</option>
+                                        <option value="CRITICAL">CRITICAL</option>
+                                    </select>
+                                </div>
+                                <input type="text" placeholder="Region (Leave blank for ALL)" style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--grid-border)', color: 'var(--text-primary)', fontFamily: '"JetBrains Mono", monospace', fontSize: '12px', boxSizing: 'border-box' }} value={alertForm.region} onChange={e => setAlertForm({...alertForm, region: e.target.value})} />
+                                <textarea rows="4" placeholder="Alert Message..." style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--grid-border)', color: 'var(--text-primary)', fontFamily: '"JetBrains Mono", monospace', fontSize: '12px', resize: 'none', boxSizing: 'border-box' }} value={alertForm.message} onChange={e => setAlertForm({...alertForm, message: e.target.value})} />
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                                    <button onClick={() => setShowAlertModal(false)} style={{ padding: '0.5rem 1rem', borderRadius: '6px', fontSize: '12px', color: 'var(--text-secondary)', backgroundColor: 'transparent', border: '1px solid transparent', cursor: 'pointer' }} onMouseOver={e => e.target.style.color = 'var(--text-primary)'} onMouseOut={e => e.target.style.color = 'var(--text-secondary)'}>Cancel</button>
+                                    <button onClick={handleAddAlert} style={{ padding: '0.5rem 1.5rem', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', backgroundColor: 'var(--status-danger)', color: '#fff', border: 'none', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Broadcast</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
+                {selectedUser && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
+                        <div className="bg-[#111] p-6 rounded-xl border border-gray-800 w-full max-w-lg shadow-2xl overflow-y-auto max-h-full">
+                            <h2 className="text-xl font-bold mb-4 text-white">User Details</h2>
+                            <pre className="text-[10px] font-mono text-green-400 p-4 bg-black rounded border border-gray-800 overflow-x-auto">
+                                {JSON.stringify(selectedUser, null, 2)}
+                            </pre>
+                            <div className="flex justify-end mt-4">
+                                <button onClick={() => setSelectedUser(null)} className="px-4 py-2 rounded text-sm text-gray-400 hover:text-white transition-colors">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {selectedReportId && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
+                        <div className="bg-[#111] p-6 rounded-xl border border-gray-800 w-full max-w-lg shadow-2xl overflow-y-auto max-h-full">
+                            <h2 className="text-xl font-bold mb-4 text-white">Report Status History</h2>
+                            <div className="flex flex-col gap-2">
+                                {auditLogs.filter(log => log.details?.reportId === selectedReportId).length > 0 ? (
+                                    auditLogs.filter(log => log.details?.reportId === selectedReportId).map(log => (
+                                        <div key={log.id} className="p-3 border-b border-gray-800 last:border-0 flex flex-col">
+                                            <span className="text-xs font-bold text-blue-400">{log.actionType}</span>
+                                            <span className="text-[10px] font-mono text-gray-400">{log.timestamp ? (log.timestamp.toDate ? log.timestamp.toDate().toLocaleString() : log.timestamp) : ''}</span>
+                                            <span className="text-[10px] font-mono mt-1 text-gray-300">By User: {log.userId} ({log.userRole})</span>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="p-4 text-center text-xs font-mono text-gray-500">No detailed audit history found for this report.</div>
+                                )}
+                            </div>
+                            <div className="flex justify-end mt-4">
+                                <button onClick={() => setSelectedReportId(null)} className="px-4 py-2 rounded text-sm text-gray-400 hover:text-white transition-colors">Close</button>
                             </div>
                         </div>
                     </div>

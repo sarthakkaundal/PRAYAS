@@ -2,6 +2,8 @@ import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { calculateFloodRisk, generateTrendData } from './services/floodPredictionService';
 import { savePrediction, generateAlert } from './services/telemetryService';
 import { getWeather, getWeatherByCity } from './services/weatherService';
+import { getClimateIntelligence } from './services/ClimateIntelligenceService';
+import { buildPredictionContext } from './services/ClimateContextBuilder';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -13,6 +15,7 @@ import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { doc, getDoc, collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import ProtectedRoute from './components/ProtectedRoute';
+import AlertBanner from './components/AlertBanner';
 
 const Reports = lazy(() => import('./pages/Reports'));
 const Map = lazy(() => import('./pages/Map'));
@@ -81,6 +84,7 @@ const RiskGauge = ({ value = 87, size = 160 }) => {
 const Header = ({ theme, toggleTheme, user }) => {
 	const [currentTime, setCurrentTime] = useState('');
 	const [isProfileHovered, setIsProfileHovered] = useState(false);
+
 	const location = useLocation();
 	const navigate = useNavigate();
 	const currentPage = location.pathname === '/' ? 'dashboard' : location.pathname.substring(1);
@@ -292,7 +296,14 @@ const DashboardView = () => {
 	const [searchCity, setSearchCity] = useState('');
 
 	const [recentAlerts, setRecentAlerts] = useState([]);
+	const [allAlerts, setAllAlerts] = useState([]);
+	const [showArchiveModal, setShowArchiveModal] = useState(false);
 	const [historicalPredictions, setHistoricalPredictions] = useState([]);
+	
+	const [activeShelters, setActiveShelters] = useState(0);
+	const [reportsToday, setReportsToday] = useState(0);
+	const [fundsDeployed, setFundsDeployed] = useState(0);
+	const [activeAlertsCount, setActiveAlertsCount] = useState(0);
 
 	const fetchWeatherAndPredict = async (lat, lon) => {
 		setIsLoading(true);
@@ -308,8 +319,12 @@ const DashboardView = () => {
 				pressure: `${weatherData.main.pressure} hPa`
 			});
 			
-			// Calculate prediction based on live weather data
-			const result = calculateFloodRisk(weatherData);
+			// Fetch historical climate intelligence
+			const climateIntel = await getClimateIntelligence(weatherData.coord.lat, weatherData.coord.lon);
+			const predictionContext = buildPredictionContext(weatherData, climateIntel);
+			
+			// Calculate prediction based on live weather data and historical context
+			const result = calculateFloodRisk(weatherData, predictionContext);
 			setPrediction(result);
 			setTrendData(generateTrendData(result.score, weatherData.main.pressure));
 			
@@ -334,8 +349,12 @@ const DashboardView = () => {
 				pressure: `${weatherData.main.pressure} hPa`
 			});
 			
-			// Calculate prediction based on live weather data
-			const result = calculateFloodRisk(weatherData);
+			// Fetch historical climate intelligence
+			const climateIntel = await getClimateIntelligence(weatherData.coord.lat, weatherData.coord.lon);
+			const predictionContext = buildPredictionContext(weatherData, climateIntel);
+			
+			// Calculate prediction based on live weather data and historical context
+			const result = calculateFloodRisk(weatherData, predictionContext);
 			setPrediction(result);
 			setTrendData(generateTrendData(result.score, weatherData.main.pressure));
 			
@@ -386,6 +405,13 @@ const DashboardView = () => {
 			setRecentAlerts(arr);
 		});
 
+		const qAllAlerts = query(collection(db, 'alerts'), orderBy('timestamp', 'desc'), limit(50));
+		const unsubAllAlerts = onSnapshot(qAllAlerts, (snapshot) => {
+			const arr = [];
+			snapshot.forEach(doc => arr.push({ id: doc.id, ...doc.data() }));
+			setAllAlerts(arr);
+		});
+
 		const qPred = query(collection(db, 'predictions'), orderBy('timestamp', 'desc'), limit(50));
 		const unsubPred = onSnapshot(qPred, (snapshot) => {
 			const arr = [];
@@ -393,9 +419,55 @@ const DashboardView = () => {
 			setHistoricalPredictions(arr);
 		});
 
+		const qAlertsCount = query(collection(db, 'alerts'));
+		const unsubAlertsCount = onSnapshot(qAlertsCount, (snapshot) => {
+			let count = 0;
+			snapshot.forEach(doc => {
+				if(doc.data().status === 'ACTIVE') count++;
+			});
+			setActiveAlertsCount(count);
+		});
+
+		const qShelters = query(collection(db, 'shelters'));
+		const unsubShelters = onSnapshot(qShelters, (snapshot) => {
+			let count = 0;
+			snapshot.forEach(doc => {
+				if(doc.data().status === 'ACTIVE') count++;
+			});
+			setActiveShelters(count);
+		});
+
+		const startOfDay = new Date();
+		startOfDay.setHours(0,0,0,0);
+		const qReports = query(collection(db, 'reports'));
+		const unsubReports = onSnapshot(qReports, (snapshot) => {
+			let count = 0;
+			snapshot.forEach(doc => {
+				const data = doc.data();
+				if (data.createdAt && data.createdAt.toDate() >= startOfDay) {
+					count++;
+				}
+			});
+			setReportsToday(count);
+		});
+
+		const qFunds = query(collection(db, 'fund_outflows'));
+		const unsubFunds = onSnapshot(qFunds, (snapshot) => {
+			let total = 0;
+			snapshot.forEach(doc => {
+				total += (Number(doc.data().amount) || 0);
+			});
+			setFundsDeployed(total);
+		});
+
 		return () => {
 			unsubAlerts();
+			unsubAllAlerts();
 			unsubPred();
+			unsubAlertsCount();
+			unsubShelters();
+			unsubReports();
+			unsubFunds();
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
@@ -441,11 +513,11 @@ const DashboardView = () => {
 	];
 
 	const operationalStats = [
-		{ label: 'Active Shelters', value: '42', max: 60, color: 'var(--status-success)' },
-		{ label: 'Active Alerts', value: '3', max: 10, color: 'var(--status-danger)' },
+		{ label: 'Active Shelters', value: activeShelters.toString(), max: 60, color: 'var(--status-success)' },
+		{ label: 'Active Alerts', value: activeAlertsCount.toString(), max: 10, color: 'var(--status-danger)' },
 		{ label: 'Safe Zones', value: '18', max: 25, color: 'var(--status-info)' },
-		{ label: 'Reports Today', value: '156', max: 200, color: 'var(--status-warning)' },
-		{ label: 'Funds Deployed', value: '₹1.2M', max: null, color: 'var(--accent-volt)' },
+		{ label: 'Reports Today', value: reportsToday.toString(), max: 200, color: 'var(--status-warning)' },
+		{ label: 'Funds Deployed', value: `₹${(fundsDeployed / 100000).toFixed(1)}L`, max: null, color: 'var(--accent-volt)' },
 	];
 
 	return (
@@ -537,10 +609,40 @@ const DashboardView = () => {
 								<div className="flex flex-col gap-1.5 p-3 rounded-md" style={{ backgroundColor: 'var(--bg-base)' }}>
 									<span className="font-mono text-[10px] uppercase tracking-widest font-semibold" style={{ color: 'var(--text-secondary)' }}>Secondary Factors</span>
 									<span className="text-xs font-semibold" style={{ color: 'var(--status-warning)' }}>
-										{prediction.xai.secondaryFactors.length > 0 ? prediction.xai.secondaryFactors.join(', ') : 'None'}
+										{prediction.xai.secondaryFactors && prediction.xai.secondaryFactors.length > 0 ? prediction.xai.secondaryFactors.join(', ') : 'None'}
 									</span>
 								</div>
 							</div>
+
+							{/* Historical Context Card */}
+							{prediction?.context && (
+								<div className="p-3 mb-4 rounded-md border" style={{ backgroundColor: 'var(--bg-surface-elevated)', borderColor: 'var(--grid-border)' }}>
+									<div className="flex items-center justify-between mb-2">
+										<div className="flex items-center gap-2">
+											<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" style={{ color: 'var(--accent-volt)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+											<span className="font-mono text-[10px] uppercase tracking-widest font-semibold" style={{ color: 'var(--text-primary)' }}>Historical Climate Intelligence</span>
+										</div>
+									</div>
+									<div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+										<div className="flex flex-col gap-1">
+											<span className="font-mono text-[9px] uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Rainfall vs Avg</span>
+											<span className="text-xs font-bold" style={{ color: prediction.context.rainfallDeviation > 50 ? 'var(--status-danger)' : 'var(--status-success)' }}>{prediction.context.rainfallDeviation > 0 ? '+' : ''}{prediction.context.rainfallDeviation.toFixed(1)}%</span>
+										</div>
+										<div className="flex flex-col gap-1">
+											<span className="font-mono text-[9px] uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Rain Percentile</span>
+											<span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Top {(100 - prediction.context.rainfallPercentile).toFixed(1)}%</span>
+										</div>
+										<div className="flex flex-col gap-1">
+											<span className="font-mono text-[9px] uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>30-Day Accum.</span>
+											<span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{prediction.context.rollingRainfall.day30.toFixed(1)} mm</span>
+										</div>
+										<div className="flex flex-col gap-1">
+											<span className="font-mono text-[9px] uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Soil Saturation Est.</span>
+											<span className="text-xs font-bold" style={{ color: prediction.context.soilSaturationEstimate > 50 ? 'var(--status-warning)' : 'var(--text-primary)' }}>{prediction.context.soilSaturationEstimate.toFixed(1)} pts</span>
+										</div>
+									</div>
+								</div>
+							)}
 
 							{/* Limitations Panel */}
 							<div className="p-3 mb-4 rounded-md border" style={{ backgroundColor: 'var(--bg-surface-elevated)', borderColor: 'var(--grid-border)' }}>
@@ -576,26 +678,36 @@ const DashboardView = () => {
 				</div>
 
 				<div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-					{weatherMetrics.map((metric, i) => (
-						<div
-							key={i}
-							className="rounded-lg p-4 border transition-all duration-200 group"
-							style={{
-								backgroundColor: 'var(--bg-surface)',
-								borderColor: 'var(--grid-border)',
-								boxShadow: 'var(--shadow-card)',
-							}}
-							onMouseOver={(e) => { e.currentTarget.style.borderColor = metric.color + '40'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-							onMouseOut={(e) => { e.currentTarget.style.borderColor = 'var(--grid-border)'; e.currentTarget.style.transform = 'translateY(0)'; }}
-						>
-							<div className="flex items-center gap-2 mb-2">
-								<span className="text-sm">{metric.icon}</span>
-								<span className="font-mono text-[10px] tracking-wider uppercase" style={{ color: 'var(--text-secondary)' }}>{metric.label}</span>
+					{isLoading ? (
+						Array.from({ length: 5 }).map((_, i) => (
+							<div key={i} className="rounded-lg p-4 border animate-pulse" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)' }}>
+								<div className="w-16 h-4 rounded bg-gray-800 mb-4"></div>
+								<div className="w-12 h-6 rounded bg-gray-700 mb-2"></div>
+								<div className="w-20 h-3 rounded bg-gray-800"></div>
 							</div>
-							<span className="text-xl font-bold block mb-1" style={{ color: metric.color }}>{metric.value}</span>
-							<span className="font-mono text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{metric.trend}</span>
-						</div>
-					))}
+						))
+					) : (
+						weatherMetrics.map((metric, i) => (
+							<div
+								key={i}
+								className="rounded-lg p-4 border transition-all duration-200 group"
+								style={{
+									backgroundColor: 'var(--bg-surface)',
+									borderColor: 'var(--grid-border)',
+									boxShadow: 'var(--shadow-card)',
+								}}
+								onMouseOver={(e) => { e.currentTarget.style.borderColor = metric.color + '40'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+								onMouseOut={(e) => { e.currentTarget.style.borderColor = 'var(--grid-border)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+							>
+								<div className="flex items-center gap-2 mb-2">
+									<span className="text-sm">{metric.icon}</span>
+									<span className="font-mono text-[10px] tracking-wider uppercase" style={{ color: 'var(--text-secondary)' }}>{metric.label}</span>
+								</div>
+								<span className="text-xl font-bold block mb-1" style={{ color: metric.color }}>{metric.value}</span>
+								<span className="font-mono text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{metric.trend}</span>
+							</div>
+						))
+					)}
 				</div>
 			</div>
 
@@ -607,24 +719,27 @@ const DashboardView = () => {
 				</div>
 
 				<div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-					{operationalStats.map((stat, i) => (
-						<div key={i} className="rounded-lg p-4 border" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)' }}>
-							<span className="font-mono text-[10px] tracking-wider uppercase block mb-2" style={{ color: 'var(--text-secondary)' }}>{stat.label}</span>
-							<span className="text-xl font-bold block mb-2" style={{ color: 'var(--text-primary)' }}>{stat.value}</span>
-							{stat.max && (
-								<div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--bg-base)' }}>
-									<div
-										className="h-full rounded-full transition-all duration-1000 ease-out"
-										style={{
-											width: `${(parseInt(stat.value) / stat.max) * 100}%`,
-											backgroundColor: stat.color,
-											boxShadow: `0 0 6px ${stat.color}40`,
-										}}
-									></div>
-								</div>
-							)}
-						</div>
-					))}
+					{isLoading ? (
+						Array.from({ length: 5 }).map((_, i) => (
+							<div key={i} className="rounded-lg p-4 border animate-pulse" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)' }}>
+								<div className="w-16 h-3 rounded bg-gray-800 mb-2"></div>
+								<div className="w-12 h-6 rounded bg-gray-700 mb-2"></div>
+								<div className="w-full h-1 bg-gray-800 rounded"></div>
+							</div>
+						))
+					) : (
+						operationalStats.map((stat, i) => (
+							<div key={i} className="rounded-lg p-4 border" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)' }}>
+								<span className="font-mono text-[10px] uppercase tracking-wider block mb-1" style={{ color: 'var(--text-secondary)' }}>{stat.label}</span>
+								<span className="text-xl font-bold block mb-2" style={{ color: stat.color }}>{stat.value}</span>
+								{stat.max && (
+									<div className="w-full h-1 bg-gray-800 rounded-full overflow-hidden">
+										<div className="h-full rounded-full" style={{ width: `${(parseInt(stat.value) / stat.max) * 100}%`, backgroundColor: stat.color }}></div>
+									</div>
+								)}
+							</div>
+						))
+					)}
 				</div>
 			</div>
 
@@ -670,7 +785,16 @@ const DashboardView = () => {
 					<div className="rounded-xl border flex flex-col" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)' }}>
 						<div className="flex justify-between items-center px-4 py-3 border-b" style={{ borderColor: 'var(--grid-border)' }}>
 							<h3 className="font-mono text-[10px] tracking-widest uppercase font-semibold" style={{ color: 'var(--text-secondary)' }}>Recent Alerts</h3>
-							<span className="font-mono text-[9px] px-2 py-0.5 rounded-md" style={{ backgroundColor: 'rgba(239,68,68,0.1)', color: 'var(--status-danger)' }}>{recentAlerts.length} Active</span>
+							<div className="flex items-center gap-2">
+								<button 
+									onClick={() => setShowArchiveModal(true)}
+									className="font-mono text-[9px] underline hover:text-white transition-colors cursor-pointer bg-transparent border-none"
+									style={{ color: 'var(--text-tertiary)' }}
+								>
+									ARCHIVE
+								</button>
+								<span className="font-mono text-[9px] px-2 py-0.5 rounded-md" style={{ backgroundColor: 'rgba(239,68,68,0.1)', color: 'var(--status-danger)' }}>{recentAlerts.length} Active</span>
+							</div>
 						</div>
 						<div className="flex-1 p-4 flex flex-col gap-3 overflow-y-auto max-h-[220px]">
 							{recentAlerts.length > 0 ? recentAlerts.map(alert => (
@@ -719,6 +843,41 @@ const DashboardView = () => {
 							>
 								Run Prediction Engine
 							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Alert Archive Modal */}
+			{showArchiveModal && (
+				<div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
+					<div className="rounded-xl overflow-hidden flex flex-col w-full max-w-2xl border" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', height: '70vh' }}>
+						<div className="p-4 border-b flex justify-between items-center" style={{ borderColor: 'var(--grid-border)' }}>
+							<div>
+								<h3 className="text-lg font-bold">Alert Archive</h3>
+								<p className="font-mono text-[10px] mt-1" style={{ color: 'var(--text-secondary)' }}>Historical log of all generated alerts</p>
+							</div>
+							<button onClick={() => setShowArchiveModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '18px' }}>✕</button>
+						</div>
+						<div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3">
+							{allAlerts.length > 0 ? allAlerts.map(alert => (
+								<div key={alert.id} className="p-3 rounded-md border" style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--grid-border)', borderLeft: `3px solid ${alert.severity === 'CRITICAL' ? 'var(--status-danger)' : alert.severity === 'WARNING' ? 'var(--status-warning)' : '#3b82f6'}` }}>
+									<div className="flex justify-between items-center mb-1">
+										<div className="flex items-center gap-2">
+											<span className="font-mono text-[9px] uppercase tracking-wider font-bold" style={{ color: alert.severity === 'CRITICAL' ? 'var(--status-danger)' : alert.severity === 'WARNING' ? 'var(--status-warning)' : '#3b82f6' }}>{alert.severity} RISK</span>
+											<span className="font-mono text-[9px] px-1.5 py-0.5 rounded border uppercase" style={{ backgroundColor: 'var(--bg-surface-elevated)', borderColor: 'var(--grid-border)', color: 'var(--text-secondary)' }}>{alert.type || 'WEATHER'}</span>
+										</div>
+										<span className="font-mono text-[9px]" style={{ color: 'var(--text-tertiary)' }}>{alert.timestamp ? alert.timestamp.toDate().toLocaleString() : ''}</span>
+									</div>
+									<p className="text-xs mt-1" style={{ color: 'var(--text-primary)' }}>{alert.message}</p>
+									{alert.region && <p className="text-[10px] mt-2 font-mono" style={{ color: 'var(--text-secondary)' }}>📍 Region: {alert.region}</p>}
+								</div>
+							)) : (
+								<div className="flex flex-col items-center justify-center h-full opacity-50">
+									<span className="text-xl mb-2">✅</span>
+									<span className="font-mono text-[10px] uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>No Alerts Found</span>
+								</div>
+							)}
 						</div>
 					</div>
 				</div>
@@ -799,6 +958,8 @@ const App = () => {
 				toggleTheme={toggleTheme}
 				user={userDoc ? { ...user, role: userDoc.role } : user}
 			/>
+			
+			<AlertBanner />
 
 			<div className="flex-1">
 				<Suspense fallback={

@@ -11,6 +11,7 @@ const Help = () => {
   });
 
   const [expandedFaq, setExpandedFaq] = useState(null);
+  const [expandedGuideline, setExpandedGuideline] = useState(null);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -40,6 +41,10 @@ const Help = () => {
 
   const toggleFaq = (index) => {
     setExpandedFaq(expandedFaq === index ? null : index);
+  };
+
+  const toggleGuideline = (index) => {
+    setExpandedGuideline(expandedGuideline === index ? null : index);
   };
 
   const faqItems = [
@@ -75,6 +80,37 @@ const Help = () => {
     { service: 'Disaster Helpline', number: '1078', color: 'var(--accent-volt)' },
     { service: 'NDRF HQ', number: '011-24363260', color: '#14b8a6', wide: true },
   ];
+
+  const safetyGuidelines = [
+    { 
+      phase: "Before a Flood (Preparedness)", 
+      points: [
+        "Prepare a Go-Bag with essentials: water, non-perishable food, flashlights, batteries, and first-aid.",
+        "Store important documents in a waterproof container.",
+        "Identify the safest, highest evacuation route from your home."
+      ],
+      color: "var(--status-warning)"
+    },
+    { 
+      phase: "During a Flood (Survival)", 
+      points: [
+        "Move to higher ground immediately. Do not wait for instructions if water is rising.",
+        "Do not walk or drive through moving water. 6 inches of moving water can knock you down.",
+        "Turn off utilities at the main switches. Disconnect electrical appliances."
+      ],
+      color: "var(--status-danger)"
+    },
+    { 
+      phase: "After a Flood (Recovery)", 
+      points: [
+        "Return home only when authorities indicate it is safe.",
+        "Avoid floodwaters; water may be contaminated by oil or raw sewage.",
+        "Service damaged septic tanks, pits, and leaching systems as soon as possible."
+      ],
+      color: "var(--status-success)"
+    }
+  ];
+
 
   return (
     <div className="p-4 md:p-8 flex flex-col gap-6 max-w-7xl mx-auto w-full">
@@ -125,6 +161,45 @@ const Help = () => {
               </div>
               <button type="submit" style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius-md)', border: 'none', backgroundColor: 'var(--accent-volt)', color: 'var(--text-inverse)', fontWeight: '600', fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit', marginTop: '4px' }} onMouseOver={(e) => { e.target.style.boxShadow = 'var(--shadow-glow-volt)'; }} onMouseOut={(e) => { e.target.style.boxShadow = 'none'; }}>Send Message</button>
             </form>
+          </div>
+
+          {/* Flood Safety Guidelines */}
+          <div className="rounded-xl border overflow-hidden mt-5" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)' }}>
+            <div className="px-5 py-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--grid-border)' }}>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'var(--accent-volt)' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Flood Safety Guidelines</h2>
+            </div>
+            <div className="flex flex-col">
+              {safetyGuidelines.map((guide, index) => (
+                <div key={index} style={{ borderBottom: index < safetyGuidelines.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
+                  <button
+                    onClick={() => toggleGuideline(index)}
+                    className="w-full p-4 text-left flex justify-between items-center transition-colors duration-150"
+                    style={{ cursor: 'pointer', border: 'none', backgroundColor: 'transparent', fontFamily: 'inherit', fontSize: '13px', color: expandedGuideline === index ? guide.color : 'var(--text-primary)', fontWeight: '500' }}
+                    onMouseOver={(e) => { if (expandedGuideline !== index) e.currentTarget.style.backgroundColor = 'var(--bg-base)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    <span>{guide.phase}</span>
+                    <svg className="w-4 h-4 flex-shrink-0 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ transform: expandedGuideline === index ? 'rotate(180deg)' : 'rotate(0deg)', color: expandedGuideline === index ? guide.color : 'var(--text-tertiary)' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                  </button>
+                  <div style={{
+                    maxHeight: expandedGuideline === index ? '300px' : '0',
+                    overflow: 'hidden',
+                    transition: 'max-height 0.3s cubic-bezier(0.22, 1, 0.36, 1)',
+                  }}>
+                    <div className="px-4 pb-4">
+                      <div className="rounded-lg p-3 text-sm leading-relaxed" style={{ backgroundColor: 'var(--bg-base)', border: '1px solid var(--grid-border)', borderLeft: `3px solid ${guide.color}`, color: 'var(--text-secondary)' }}>
+                        <ul className="list-disc pl-4 flex flex-col gap-2">
+                            {guide.points.map((pt, i) => (
+                                <li key={i}>{pt}</li>
+                            ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 

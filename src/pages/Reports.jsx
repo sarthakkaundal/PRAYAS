@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from './Auth/firebase';
-import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, limit, doc, updateDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { logAuditAction } from '../services/telemetryService';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
@@ -27,6 +27,7 @@ const LocationMarker = ({ position, setPosition }) => {
 
 const Reports = () => {
   const [reports, setReports] = useState([]);
+  const [isReportsLoading, setIsReportsLoading] = useState(true);
   const [location, setLocation] = useState({ lat: null, lng: null, address: '' });
   const [description, setDescription] = useState('');
   const [severity, setSeverity] = useState('Minor');
@@ -41,6 +42,13 @@ const Reports = () => {
   const [showMapModal, setShowMapModal] = useState(false);
   const [manualLat, setManualLat] = useState('');
   const [manualLng, setManualLng] = useState('');
+  
+  // Filtering state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [severityFilter, setSeverityFilter] = useState('All');
+  
+  // Pagination
+  const [reportLimit, setReportLimit] = useState(10);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -53,13 +61,14 @@ const Reports = () => {
       }
     });
 
-    const q = query(collection(db, "reports"), orderBy("createdAt", "desc"));
+    const q = query(collection(db, "reports"), orderBy("createdAt", "desc"), limit(reportLimit));
     const unsubscribeReports = onSnapshot(q, (querySnapshot) => {
       const reportsArray = [];
       querySnapshot.forEach((doc) => {
         reportsArray.push({ id: doc.id, ...doc.data() });
       });
       setReports(reportsArray);
+      setIsReportsLoading(false);
     });
 
     detectLocation();
@@ -68,7 +77,7 @@ const Reports = () => {
       unsubscribeAuth();
       unsubscribeReports();
     };
-  }, []);
+  }, [reportLimit]);
 
   const detectLocation = () => {
     setIsLoadingLocation(true);
@@ -105,6 +114,14 @@ const Reports = () => {
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+        alert("Only JPG, PNG, and WebP images are allowed.");
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        alert("File is too large. Max size is 5MB.");
+        return;
+      }
       setImage(file);
       const reader = new FileReader();
       reader.onload = (e) => setImagePreview(e.target.result);
@@ -128,7 +145,7 @@ const Reports = () => {
         body: formData,
       });
       const data = await response.json();
-      return data.secure_url;
+      return data.secure_url ? data.secure_url.replace('/upload/', '/upload/w_800,q_auto,f_auto/') : null;
     } catch (err) {
       console.error(err);
       return null;
@@ -200,6 +217,25 @@ const Reports = () => {
     }
   };
 
+  const handleDeleteReport = async (id) => {
+    if (userRole === 'Citizen') return;
+    if (window.confirm("Are you sure you want to completely delete this false report?")) {
+      try {
+        await deleteDoc(doc(db, "reports", id));
+        logAuditAction(auth.currentUser?.uid, userRole, 'REPORT_DELETED', { reportId: id });
+      } catch (err) {
+        console.error("Error deleting report:", err);
+      }
+    }
+  };
+
+  // Derived state for filtering
+  const filteredReports = reports.filter(r => {
+    const matchesSearch = r.description?.toLowerCase().includes(searchQuery.toLowerCase()) || r.location?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSeverity = severityFilter === 'All' || r.severity === severityFilter;
+    return matchesSearch && matchesSeverity;
+  });
+
   const severityConfig = {
     'Severe': { color: 'var(--status-danger)', bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.2)', label: 'Critical' },
     'Moderate': { color: 'var(--status-warning)', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.2)', label: 'Moderate' },
@@ -210,6 +246,7 @@ const Reports = () => {
     'pending': { color: '#f97316', label: 'Pending' },
     'responding': { color: '#3b82f6', label: 'Responding' },
     'resolved': { color: '#22c55e', label: 'Resolved' },
+    'rejected': { color: '#ef4444', label: 'Rejected' },
   };
 
   const inputStyle = {
@@ -347,19 +384,49 @@ const Reports = () => {
         {/* Feed */}
         <div className="lg:col-span-2 opacity-0 animate-in" style={{ animationDelay: '0.1s' }}>
           <div className="rounded-xl border overflow-hidden flex flex-col" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)', boxShadow: 'var(--shadow-card)', maxHeight: '680px' }}>
-            <div className="px-5 py-3 border-b flex justify-between items-center" style={{ borderColor: 'var(--grid-border)', backgroundColor: 'var(--bg-surface)' }}>
+            <div className="px-5 py-3 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3" style={{ borderColor: 'var(--grid-border)', backgroundColor: 'var(--bg-surface)' }}>
               <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Recent Reports</h2>
-              <span className="font-mono text-[9px] px-2 py-0.5 rounded-md uppercase tracking-wider font-semibold" style={{ backgroundColor: 'rgba(34,197,94,0.1)', color: 'var(--status-success)' }}>Live Feed</span>
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <input 
+                  type="text" 
+                  placeholder="Search by location or description..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{...inputStyle, padding: '4px 8px', fontSize: '11px', flex: 1}} 
+                />
+                <select 
+                  value={severityFilter} 
+                  onChange={(e) => setSeverityFilter(e.target.value)}
+                  style={{...inputStyle, padding: '4px 8px', fontSize: '11px', width: 'auto'}}
+                >
+                  <option value="All">All Severities</option>
+                  <option value="Severe">Severe</option>
+                  <option value="Moderate">Moderate</option>
+                  <option value="Minor">Minor</option>
+                </select>
+              </div>
             </div>
             
             <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3" style={{ backgroundColor: 'var(--bg-base)' }}>
-              {reports.length === 0 ? (
+              {isReportsLoading ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="rounded-lg p-4 border animate-pulse" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--grid-border)' }}>
+                    <div className="flex justify-between items-center mb-3">
+                      <div className="w-16 h-4 rounded-full bg-gray-700"></div>
+                      <div className="w-24 h-3 rounded bg-gray-800"></div>
+                    </div>
+                    <div className="w-full h-3 rounded bg-gray-800 mb-2"></div>
+                    <div className="w-3/4 h-3 rounded bg-gray-800 mb-4"></div>
+                    <div className="w-full max-w-xs h-32 rounded-md bg-gray-800"></div>
+                  </div>
+                ))
+              ) : filteredReports.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16" style={{ opacity: 0.4 }}>
                   <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1"><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                  <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>No reports yet</p>
+                  <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>No reports match the filter.</p>
                 </div>
               ) : (
-                reports.map(report => {
+                filteredReports.map(report => {
                   const sev = severityConfig[report.severity] || severityConfig['Minor'];
                   const status = statusConfig[report.status] || statusConfig['pending'];
                   const dateString = report.createdAt?.toDate ? report.createdAt.toDate().toLocaleTimeString('en-US', { hour12: false }) : '';
@@ -391,7 +458,7 @@ const Reports = () => {
 
                       {/* Admin/Responder Controls */}
                       {(userRole === 'Responder' || userRole === 'RegionalAdmin' || userRole === 'SuperAdmin') && (
-                        <div className="mt-3 flex gap-2">
+                        <div className="mt-3 flex gap-2 items-center flex-wrap">
                           <select 
                             value={report.status} 
                             onChange={(e) => updateStatus(report.id, e.target.value)}
@@ -400,12 +467,27 @@ const Reports = () => {
                             <option value="pending">Set Pending</option>
                             <option value="responding">Set Responding</option>
                             <option value="resolved">Set Resolved</option>
+                            <option value="rejected">Set Rejected</option>
                           </select>
+                          <button onClick={() => handleDeleteReport(report.id)} className="px-2 py-1 rounded bg-red-600/20 text-red-500 hover:bg-red-600/40 text-[10px] uppercase font-bold transition-colors">
+                            Delete False Report
+                          </button>
                         </div>
                       )}
                     </div>
                   );
                 })
+              )}
+              {reports.length >= reportLimit && (
+                <div className="flex justify-center mt-2 pb-2">
+                  <button 
+                    onClick={() => setReportLimit(prev => prev + 10)}
+                    className="px-4 py-2 rounded font-mono text-[11px] font-bold tracking-wider"
+                    style={{ backgroundColor: 'var(--bg-surface-elevated)', border: '1px solid var(--grid-border)', color: 'var(--text-secondary)' }}
+                  >
+                    LOAD MORE REPORTS
+                  </button>
+                </div>
               )}
             </div>
           </div>

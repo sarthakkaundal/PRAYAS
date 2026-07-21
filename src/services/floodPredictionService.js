@@ -5,51 +5,23 @@ import { calculateHumidityScore } from '../utils/humidityScore';
 import { calculatePressureScore } from '../utils/pressureScore';
 import { calculateWindScore } from '../utils/windScore';
 import { calculateCloudScore } from '../utils/cloudScore';
-
-/**
- * Generates an explanation based on the top contributing risk factors.
- */
-const generateXAI = (scores, finalScore, categoryLevel) => {
-  if (finalScore < 20) {
-    return {
-      primaryDriver: "None",
-      primaryExplanation: "Stable atmospheric conditions and minimal precipitation indicate a safe environment.",
-      secondaryFactors: []
-    };
-  }
-
-  const contributions = [
-    { name: "Heavy Rainfall", value: scores.rainfall * FACTOR_WEIGHTS.RAINFALL, desc: "recent intense precipitation" },
-    { name: "Low Pressure", value: scores.pressure * FACTOR_WEIGHTS.PRESSURE, desc: "a cyclonic/low-pressure system" },
-    { name: "High Humidity", value: scores.humidity * FACTOR_WEIGHTS.HUMIDITY, desc: "highly saturated atmospheric moisture" },
-    { name: "Strong Winds", value: scores.wind * FACTOR_WEIGHTS.WIND, desc: "high wind speeds" },
-    { name: "Cloud Cover", value: scores.cloud * FACTOR_WEIGHTS.CLOUD, desc: "dense storm clouds" }
-  ];
-
-  contributions.sort((a, b) => b.value - a.value);
-
-  const primary = contributions[0];
-  const secondary = contributions.slice(1).filter(c => c.value > 5).map(c => c.name);
-
-  return {
-    primaryDriver: primary.name,
-    primaryExplanation: `${primary.name} (${primary.desc}) is the most significant factor driving the current ${categoryLevel} risk level.`,
-    secondaryFactors: secondary
-  };
-};
+import { applyRiskModifiers } from '../utils/riskModifiers';
+import { generateContextualExplanation } from '../utils/predictionExplanation';
 
 /**
  * Main prediction engine: evaluates live weather data to return a flood risk profile.
+ * Now context-aware: consumes processed historical intelligence via PredictionContext.
  */
-export const calculateFloodRisk = (weatherData) => {
+export const calculateFloodRisk = (weatherData, predictionContext = null) => {
   if (!weatherData) {
     return {
       score: 0,
       level: "Unknown",
       confidence: "0%",
       explanation: "No weather data available.",
-      factors: {},
       recommendations: ["Check connection or API keys"],
+      contributors: [],
+      context: null,
       color: "var(--text-secondary)"
     };
   }
@@ -62,8 +34,8 @@ export const calculateFloodRisk = (weatherData) => {
   const windSpeed = weatherData.wind ? weatherData.wind.speed : 0;
   const clouds = weatherData.clouds ? weatherData.clouds.all : 0;
 
-  // Calculate individual heuristic scores
-  const scores = {
+  // Calculate individual heuristic base scores
+  const baseScores = {
     rainfall: calculateRainfallScore(rain1h, rain3h),
     humidity: calculateHumidityScore(humidity),
     pressure: calculatePressureScore(pressure),
@@ -71,34 +43,46 @@ export const calculateFloodRisk = (weatherData) => {
     cloud: calculateCloudScore(clouds)
   };
 
+  // Apply risk modifiers based on historical context
+  const { modifiedScores, soilSaturationModifier } = applyRiskModifiers(baseScores, predictionContext);
+
   // Combine scores using configured weights
   const weightedScore = 
-    (scores.rainfall * FACTOR_WEIGHTS.RAINFALL) +
-    (scores.humidity * FACTOR_WEIGHTS.HUMIDITY) +
-    (scores.pressure * FACTOR_WEIGHTS.PRESSURE) +
-    (scores.wind * FACTOR_WEIGHTS.WIND) +
-    (scores.cloud * FACTOR_WEIGHTS.CLOUD);
+    (modifiedScores.rainfall * FACTOR_WEIGHTS.RAINFALL) +
+    (modifiedScores.humidity * FACTOR_WEIGHTS.HUMIDITY) +
+    (modifiedScores.pressure * FACTOR_WEIGHTS.PRESSURE) +
+    (modifiedScores.wind * FACTOR_WEIGHTS.WIND) +
+    (modifiedScores.cloud * FACTOR_WEIGHTS.CLOUD) + 
+    (soilSaturationModifier || 0);
 
   const finalScore = Math.min(100, Math.round(weightedScore));
 
   // Determine risk category
   const category = getRiskCategory(finalScore);
-  const xai = generateXAI(scores, finalScore, category.level);
+  
+  // Generate advanced explainable AI text using both current + historical context
+  const xai = generateContextualExplanation(modifiedScores, finalScore, category.level, predictionContext);
 
-  // Future inputs (e.g. riverLevel, soilMoisture) can be appended to factors and increase confidence
+  // Dynamic confidence calculation based on data availability
+  let confidence = 65; // Base confidence with just live weather
+  if (predictionContext) confidence += 20; // High confidence if historical context is applied
+  // Future: +5 for soil sensors, +10 for ML models...
+
   return {
     score: finalScore,
     level: category.level,
-    confidence: "65%", // Weather only
+    confidence: `${confidence}%`,
     explanation: xai.primaryExplanation,
-    xai: xai,
+    recommendations: category.recommendations,
+    contributors: xai.secondaryFactors,
+    context: predictionContext,
+    xai: xai, // Keeping backward compatibility if UI needs it
     factors: {
       rainfall: rain1h || rain3h || 0,
       humidity,
       pressure,
       windSpeed
     },
-    recommendations: category.recommendations,
     color: category.color
   };
 };

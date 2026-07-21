@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './Auth/firebase';
 
 const Profile = () => {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [reportsSubmitted, setReportsSubmitted] = useState(0);
+  const [reportsVerified, setReportsVerified] = useState(0);
+  const [activityLogs, setActivityLogs] = useState([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -21,6 +24,34 @@ const Profile = () => {
         } catch (error) {
           console.error("Error fetching user data:", error);
         }
+
+        // Fetch reports stats
+        const qSubmitted = query(collection(db, 'reports'), where('reportedBy', '==', user.uid));
+        const unsubSubmitted = onSnapshot(qSubmitted, (snapshot) => {
+          setReportsSubmitted(snapshot.size);
+        });
+
+        let unsubVerified = () => {};
+        const qVerified = query(collection(db, 'reports'), where('verifiedBy', '==', user.uid));
+        unsubVerified = onSnapshot(qVerified, (snapshot) => {
+          setReportsVerified(snapshot.size);
+        });
+
+        // Fetch activity logs
+        let unsubActivity = () => {};
+        const qActivity = query(collection(db, 'audit_logs'), where('userId', '==', user.uid));
+        unsubActivity = onSnapshot(qActivity, (snapshot) => {
+          const logs = [];
+          snapshot.forEach(doc => logs.push({ id: doc.id, ...doc.data() }));
+          // Sort client-side if no index, else order by timestamp desc
+          logs.sort((a, b) => {
+            const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : 0;
+            const timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : 0;
+            return timeB - timeA;
+          });
+          setActivityLogs(logs.slice(0, 10)); // keep last 10
+        });
+
       } else {
         setUserData(null);
       }
@@ -102,12 +133,40 @@ const Profile = () => {
                 { label: 'Email', value: userData.email },
                 { label: 'Phone', value: userData.phone || 'Not provided' },
                 { label: 'Member Since', value: new Date(userData.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' }) },
+                { label: 'Last Login', value: userData.lastLogin ? (userData.lastLogin.toDate ? userData.lastLogin.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : new Date(userData.lastLogin).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})) : 'Unknown' },
+                { label: 'Reports Submitted', value: reportsSubmitted.toString() },
+                ...(userData.role !== 'Citizen' ? [{ label: 'Reports Verified', value: reportsVerified.toString() }] : [])
               ].map((item, i) => (
                 <div key={i}>
                   <div className="font-mono text-[9px] uppercase tracking-wider mb-0.5" style={{ color: 'var(--text-tertiary)' }}>{item.label}</div>
                   <div className="text-sm font-medium font-mono truncate" style={{ color: 'var(--text-primary)' }} title={item.value}>{item.value}</div>
                 </div>
               ))}
+            </div>
+
+            {/* Activity Statistics */}
+            <div className="p-5 border-t" style={{ borderColor: 'var(--grid-border)' }}>
+              <h2 className="text-[10px] font-mono tracking-wider uppercase font-semibold mb-4 flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                Recent Activity
+              </h2>
+              <div className="flex flex-col gap-3">
+                {activityLogs.length > 0 ? activityLogs.map(log => (
+                  <div key={log.id} className="flex gap-2 items-start border-b pb-2 last:border-0 last:pb-0" style={{ borderColor: 'var(--grid-border)' }}>
+                    <div className="w-1.5 h-1.5 rounded-full mt-1.5" style={{ backgroundColor: 'var(--accent-volt)' }}></div>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold" style={{ color: 'var(--text-primary)' }}>{log.actionType}</span>
+                        <span className="font-mono text-[8px]" style={{ color: 'var(--text-tertiary)' }}>
+                          {log.timestamp?.toDate ? log.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="text-center font-mono text-[9px]" style={{ color: 'var(--text-tertiary)' }}>No recent activity.</div>
+                )}
+              </div>
             </div>
           </div>
         </div>

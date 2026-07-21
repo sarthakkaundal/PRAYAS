@@ -27,10 +27,6 @@ The system architecture flows from data ingestion to user action:
 # Key Features
 ### 1. Interactive Map Interface
 - Real-Time Flood Risk: Visualizes risk zones based on live rainfall data and terrain elevation.
-- "What-If" Simulations: An interactive slider allows users to simulate rainfall (e.g., 50mm vs 150mm) to see how floodwaters might expand over local streets.
-- Safe Shelters: Locate nearest relief camps with real-time capacity info.
-- Evacuation Routes: AI-generated safe walking/driving routes avoiding flooded zones.
-- Bilingual Narration: Text-to-Speech navigation and briefings in English and Hindi.
 
 ### 2. Relief Funds Dashboard (Transparency Module)
 #### Public View:
@@ -47,13 +43,7 @@ The system architecture flows from data ingestion to user action:
 
 - Real-time Alert System: Pushes immediate notifications (SMS/App Alerts) to users in high-risk geo-fenced areas.
 - Raise a Ticket: Users can report trapped victims or infrastructure damage directly to authorities.
-- Local News Feed: Curated updates regarding the disaster in the specific locality.
 - Emergency Contacts: One-tap access to NDRF, Police, Ambulance, and Fire services.
-
-### 4. AI-Powered Risk Model
-
-- Integrates Digital Elevation Models (DEM) for granular, street-level flood prevention.
-- Uses historical flooding patterns to validate current risk levels.
 
 # Tech Stack
 - Frontend Framework: React.js
@@ -109,6 +99,9 @@ npm start
 
 # Future Roadmap
 
+- Interactive Map AI Features: Implement "What-If" simulations, Evacuation Routing, Safe Shelters Locator, and Bilingual Text-to-Speech narration.
+- AI-Powered Risk Model: Integrate Digital Elevation Models (DEM) for granular flood modeling and historical data validation.
+- Local News Feed: Add curated updates regarding the disaster in specific localities.
 - IoT Integration: Connect with river-level sensors for automated trigger alerts.
 - Offline Mode: PWA implementation to allow map access via SMS/USSD data caching.
 - Crowdsourcing: Allow users to upload photos of flooded streets to validate the AI model.
