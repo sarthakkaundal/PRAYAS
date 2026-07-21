@@ -11,7 +11,14 @@ const Profile = () => {
   const [activityLogs, setActivityLogs] = useState([]);
 
   useEffect(() => {
+    let unsubSubmitted = () => {};
+    let unsubVerified = () => {};
+    let unsubActivity = () => {};
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      unsubSubmitted();
+      unsubVerified();
+      unsubActivity();
       if (user) {
         try {
           const userRef = doc(db, 'users', user.uid);
@@ -27,18 +34,16 @@ const Profile = () => {
 
         // Fetch reports stats
         const qSubmitted = query(collection(db, 'reports'), where('reportedBy', '==', user.uid));
-        const unsubSubmitted = onSnapshot(qSubmitted, (snapshot) => {
+        unsubSubmitted = onSnapshot(qSubmitted, (snapshot) => {
           setReportsSubmitted(snapshot.size);
         });
 
-        let unsubVerified = () => {};
         const qVerified = query(collection(db, 'reports'), where('verifiedBy', '==', user.uid));
         unsubVerified = onSnapshot(qVerified, (snapshot) => {
           setReportsVerified(snapshot.size);
         });
 
         // Fetch activity logs
-        let unsubActivity = () => {};
         const qActivity = query(collection(db, 'audit_logs'), where('userId', '==', user.uid));
         unsubActivity = onSnapshot(qActivity, (snapshot) => {
           const logs = [];
@@ -58,7 +63,12 @@ const Profile = () => {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      unsubSubmitted();
+      unsubVerified();
+      unsubActivity();
+    };
   }, []);
 
   if (loading) {
